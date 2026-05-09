@@ -7,32 +7,47 @@ It vendors Anthropic's official `ralph-loop` plugin, keeps the same Stop hook
 lifecycle, and changes one key thing: instead of replaying the same prompt,
 Clone Loop asks Clone what the user would probably say next.
 
-Based on Anthropic Ralph Loop, modified by Clone. The vendored upstream plugin
+Based on Anthropic Ralph Loop, modified by Clone. The included Ralph Loop code
 is licensed under Apache-2.0; see `LICENSE`.
 
 ## Why Clone Loop
 
-Ralph Loop keeps Claude Code working. Clone Loop keeps it working with a
-personalized next instruction.
+Ralph Loop keeps Claude Code working by replaying the original task whenever
+Claude tries to stop.
 
 ```mermaid
 flowchart TD
-  subgraph R["Upstream Ralph Loop"]
-    R1["Claude tries to stop"] --> R2["Stop hook blocks"]
-    R2 --> R3["Replay the original prompt"]
-    R3 --> R4["Claude continues"]
-  end
+  R1["User starts Ralph Loop with one task"]
+  R2["Claude works on files"]
+  R3["Claude tries to stop"]
+  R4["Stop hook blocks"]
+  R5["Same original prompt is replayed"]
+  R6["Claude continues in the same session"]
 
-  subgraph C["Clone Loop"]
-    C1["Claude tries to stop"] --> C2["Stop hook blocks"]
-    C2 --> C3["Clone MCP predicts the next prompt"]
-    C3 --> C4{"confidence >= threshold?"}
-    C4 -->|yes| C5["Pass prediction payload to Claude"]
-    C4 -->|no| C6["Escalate to the human"]
-  end
+  R1 --> R2 --> R3 --> R4 --> R5 --> R6
 ```
 
-| Area | Upstream Ralph Loop | Clone Loop |
+Clone Loop keeps the same loop, but replaces "repeat the same prompt" with
+"ask Clone what the user would probably say next."
+
+```mermaid
+flowchart TD
+  C1["User starts Clone Loop with one task"]
+  C2["Claude works on files"]
+  C3["Claude tries to stop"]
+  C4["Stop hook blocks"]
+  C5["Hook calls Clone MCP predict_next_prompt"]
+  C6{"confidence >= user threshold?"}
+  C7["Pass prediction payload to Claude"]
+  C8["Claude evaluates it in context and continues"]
+  C9["Escalate to the human"]
+
+  C1 --> C2 --> C3 --> C4 --> C5 --> C6
+  C6 -->|yes| C7 --> C8
+  C6 -->|no| C9
+```
+
+| Area | Ralph Loop | Clone Loop |
 | --- | --- | --- |
 | Next instruction | Same original prompt | Hook-mediated Clone prediction |
 | Personalization | None | User memory through `predict_next_prompt` |
@@ -40,7 +55,7 @@ flowchart TD
 
 ## Plugin Structure
 
-The upstream Ralph Loop files are kept for compatibility:
+The original Ralph Loop files are kept for compatibility:
 
 ```text
 .claude-plugin/plugin.json     Plugin metadata for Claude Code.
@@ -51,7 +66,7 @@ hooks/hooks.json               Registers a Stop hook.
 hooks/stop-hook.sh             Blocks stop and re-injects the prompt.
 scripts/setup-ralph-loop.sh    Parses options and writes loop state.
 README.md                      User documentation.
-LICENSE                        Upstream Apache-2.0 license.
+LICENSE                        Apache-2.0 license from Ralph Loop.
 ```
 
 Clone adds `/clone:loop`, `/clone:cancel-loop`, `.claude/clone-loop.local.md`,
@@ -80,8 +95,8 @@ Runtime shell requirements differ by OS:
   `C:\Program Files\Git\bin\bash.exe` rather than WSL's
   `C:\Windows\System32\bash.exe`.
 
-Upstream Ralph Loop uses `jq` for JSON parsing. Clone Loop uses Node instead,
-so Windows does not need a separate `jq` install when Git Bash is present.
+Ralph Loop uses `jq` for JSON parsing. Clone Loop uses Node instead, so Windows
+does not need a separate `jq` install when Git Bash is present.
 
 Clone's direct remote MCP endpoint is registered in `.mcp.json`:
 

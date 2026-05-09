@@ -8,7 +8,7 @@ hide-from-slash-command-tool: "true"
 # Legacy Clone Loop Alias
 
 `/clone:loop` is the preferred command. This legacy Ralph-compatible command
-uses the same setup script so the vendored upstream command surface remains
+uses the same setup script so the original Ralph-compatible command remains
 available.
 
 ```!
