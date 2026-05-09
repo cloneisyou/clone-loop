@@ -10,6 +10,54 @@ set -euo pipefail
 HOOK_INPUT=$(cat)
 LOOP_STATE_FILE=".claude/clone-loop.local.md"
 
+json_field() {
+  local field="$1"
+  node -e '
+const field = process.argv[1];
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  try {
+    const normalized = input.replace(/^\uFEFF/, "").trim();
+    const parsed = normalized ? JSON.parse(normalized) : {};
+    const value = parsed[field];
+    process.stdout.write(value == null ? "" : String(value));
+  } catch {
+    process.exit(1);
+  }
+});
+' "$field"
+}
+
+last_assistant_text() {
+  node -e '
+const fs = require("node:fs");
+const input = fs.readFileSync(0, "utf8");
+const lines = input.split(/\r?\n/).filter(Boolean);
+const texts = [];
+for (const line of lines) {
+  const parsed = JSON.parse(line.replace(/^\uFEFF/, ""));
+  const content = parsed.message?.content;
+  if (!Array.isArray(content)) continue;
+  for (const block of content) {
+    if (block?.type === "text") texts.push(block.text || "");
+  }
+}
+process.stdout.write(texts.at(-1) || "");
+'
+}
+
+json_block_response() {
+  STOP_PROMPT="$1" STOP_MSG="$2" node -e '
+console.log(JSON.stringify({
+  decision: "block",
+  reason: process.env.STOP_PROMPT || "",
+  systemMessage: process.env.STOP_MSG || "",
+}, null, 2));
+'
+}
+
 if [[ ! -f "$LOOP_STATE_FILE" ]]; then
   exit 0
 fi
@@ -27,7 +75,7 @@ CLONE_K="${CLONE_K:-1}"
 CLONE_AGENT="${CLONE_AGENT:-Claude Code Clone Loop}"
 
 STATE_SESSION=$(echo "$FRONTMATTER" | grep '^session_id:' | sed 's/session_id: *//' || true)
-HOOK_SESSION=$(echo "$HOOK_INPUT" | jq -r '.session_id // ""')
+HOOK_SESSION=$(printf '%s' "$HOOK_INPUT" | json_field session_id)
 if [[ -n "$STATE_SESSION" ]] && [[ "$STATE_SESSION" != "$HOOK_SESSION" ]]; then
   exit 0
 fi
@@ -56,11 +104,11 @@ if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
   exit 0
 fi
 
-HOOK_LAST_MESSAGE=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // ""')
+HOOK_LAST_MESSAGE=$(printf '%s' "$HOOK_INPUT" | json_field last_assistant_message)
 LAST_OUTPUT="$HOOK_LAST_MESSAGE"
 
 if [[ -z "$LAST_OUTPUT" ]]; then
-  TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path')
+  TRANSCRIPT_PATH=$(printf '%s' "$HOOK_INPUT" | json_field transcript_path)
   if [[ ! -f "$TRANSCRIPT_PATH" ]]; then
     echo "Clone Loop: Transcript file not found; stopping." >&2
     rm "$LOOP_STATE_FILE"
@@ -81,13 +129,11 @@ if [[ -z "$LAST_OUTPUT" ]]; then
   fi
 
   set +e
-  LAST_OUTPUT=$(echo "$LAST_LINES" | jq -rs '
-    map(.message.content[]? | select(.type == "text") | .text) | last // ""
-  ' 2>&1)
-  JQ_EXIT=$?
+  LAST_OUTPUT=$(printf '%s' "$LAST_LINES" | last_assistant_text 2>&1)
+  JSON_EXIT=$?
   set -e
 
-  if [[ $JQ_EXIT -ne 0 ]]; then
+  if [[ $JSON_EXIT -ne 0 ]]; then
     echo "Clone Loop: Failed to parse assistant message JSON." >&2
     echo "Error: $LAST_OUTPUT" >&2
     rm "$LOOP_STATE_FILE"
@@ -155,13 +201,6 @@ After the MCP result:
 EOF
 )
 
-jq -n \
-  --arg prompt "$CONTINUATION_PROMPT" \
-  --arg msg "$SYSTEM_MSG" \
-  '{
-    "decision": "block",
-    "reason": $prompt,
-    "systemMessage": $msg
-  }'
+json_block_response "$CONTINUATION_PROMPT" "$SYSTEM_MSG"
 
 exit 0
