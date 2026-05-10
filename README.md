@@ -142,7 +142,7 @@ The plugin defaults to the direct endpoint so Claude Code only needs
 ```bash
 export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 command -v bash node perl sed awk
-claude plugin validate apps/claude-plugin
+claude plugin validate .
 ```
 
 ### Windows
@@ -154,7 +154,7 @@ Get-Command node
 Get-Command perl
 Get-Command sed
 Get-Command awk
-claude.exe plugin validate apps\claude-plugin
+claude.exe plugin validate .
 ```
 
 `Get-Command bash` should point to Git Bash:
@@ -252,7 +252,6 @@ Always set a reasonable `--max-iterations`.
 macOS / Linux:
 
 ```bash
-cd apps/claude-plugin
 npm test
 npm run test:mcp
 ```
@@ -260,7 +259,6 @@ npm run test:mcp
 Windows PowerShell:
 
 ```powershell
-Set-Location apps\claude-plugin
 npm test
 npm run test:mcp
 ```
@@ -280,13 +278,13 @@ npm run test:mcp
 Validate with Claude Code on macOS / Linux:
 
 ```bash
-claude plugin validate apps/claude-plugin
+claude plugin validate .
 ```
 
 Validate with Claude Code on Windows:
 
 ```powershell
-claude.exe plugin validate apps\claude-plugin
+claude.exe plugin validate .
 ```
 
 ## Installation Commands
@@ -295,15 +293,15 @@ claude.exe plugin validate apps\claude-plugin
 > Use v2 by default. It is the hook-mediated Clone MCP version.
 
 > [!Note]
-> This repository is a monorepo. Marketplace installation uses `--sparse` so
-> Claude Code only checks out `.claude-plugin` and `apps/claude-plugin`.
+> This repository contains only the Clone Claude Code plugin. The main Clone
+> monorepo consumes it as a git submodule.
 
 ### macOS / Linux: GitHub Marketplace Install
 
 ```bash
 export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
-claude plugin marketplace add cloneisyou/clone@main --sparse .claude-plugin apps/claude-plugin
-claude plugin install clone@clone --scope user
+claude plugin marketplace add cloneisyou/clone-claude-plugin@main
+claude plugin install clone@clone-labs --scope user
 claude
 ```
 
@@ -317,8 +315,8 @@ Then run inside Claude Code:
 
 ```powershell
 $env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
-claude.exe plugin marketplace add cloneisyou/clone@main --sparse .claude-plugin apps/claude-plugin
-claude.exe plugin install clone@clone --scope user
+claude.exe plugin marketplace add cloneisyou/clone-claude-plugin@main
+claude.exe plugin install clone@clone-labs --scope user
 claude.exe
 ```
 
@@ -335,11 +333,11 @@ Then run inside Claude Code:
 ### macOS / Linux: Session-Only
 
 ```bash
-git clone https://github.com/cloneisyou/clone.git
-cd clone
+git clone https://github.com/cloneisyou/clone-claude-plugin.git
+cd clone-claude-plugin
 git checkout main
 export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
-claude --plugin-dir ./apps/claude-plugin
+claude --plugin-dir .
 ```
 
 Then run inside Claude Code:
@@ -351,11 +349,11 @@ Then run inside Claude Code:
 ### Windows PowerShell: Session-Only
 
 ```powershell
-git clone https://github.com/cloneisyou/clone.git
-Set-Location clone
+git clone https://github.com/cloneisyou/clone-claude-plugin.git
+Set-Location clone-claude-plugin
 git checkout main
 $env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
-claude.exe --plugin-dir .\apps\claude-plugin
+claude.exe --plugin-dir .
 ```
 
 Then run inside Claude Code:
@@ -369,21 +367,21 @@ Then run inside Claude Code:
 Use this only while developing the plugin from a local clone.
 
 ```bash
-git clone https://github.com/cloneisyou/clone.git
-cd clone
+git clone https://github.com/cloneisyou/clone-claude-plugin.git
+cd clone-claude-plugin
 git checkout main
 export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 claude plugin marketplace add . --scope user
-claude plugin install clone@clone --scope user
+claude plugin install clone@clone-labs --scope user
 ```
 
 ```powershell
-git clone https://github.com/cloneisyou/clone.git
-Set-Location clone
+git clone https://github.com/cloneisyou/clone-claude-plugin.git
+Set-Location clone-claude-plugin
 git checkout main
 $env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
 claude.exe plugin marketplace add . --scope user
-claude.exe plugin install clone@clone --scope user
+claude.exe plugin install clone@clone-labs --scope user
 ```
 
 ### Published Plugin

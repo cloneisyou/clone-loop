@@ -1,0 +1,16 @@
+{
+  "name": "clone-labs",
+  "metadata": {
+    "description": "Clone Labs Claude Code plugins."
+  },
+  "owner": {
+    "name": "Clone Labs"
+  },
+  "plugins": [
+    {
+      "name": "clone",
+      "source": "./",
+      "description": "Clone Loop for Claude Code. A Ralph-style automation loop powered by Clone MCP next-prompt prediction."
+    }
+  ]
+}
