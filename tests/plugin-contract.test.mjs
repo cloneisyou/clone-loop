@@ -51,7 +51,7 @@ describe('Clone Claude plugin contract', () => {
     assert.equal(mcp.mcpServers.clone.url, 'https://api.clone.is/mcp')
     assert.equal(
       mcp.mcpServers.clone.headers['X-Clone-API-Key'],
-      '${CLONE_API_TOKEN}',
+      '${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}',
     )
   })
 

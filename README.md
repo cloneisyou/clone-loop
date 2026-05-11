@@ -16,6 +16,9 @@ claude plugin marketplace add cloneisyou/clone-claude-plugin@main
 claude plugin install clone@clone-labs --scope user
 ```
 
+If `clone-labs` is already added on this machine, the install command alone is
+enough.
+
 Or install from inside Claude Code:
 
 ```text
@@ -132,7 +135,9 @@ stored beside the original prompt.
 ## Requirements
 
 - Claude Code with plugin support.
-- `CLONE_API_TOKEN` exported in the shell that launches Claude Code.
+- Optional `CLONE_API_TOKEN` exported in the shell that launches Claude Code.
+  If unset, Clone Loop uses the public YC reviewer demo key shown on
+  https://clone.is/you.
 - Optional Claude MCP permission for manual `mcp__clone__predict_next_prompt`
   calls. The v2 loop path calls Clone MCP directly from the Stop hook.
 
@@ -160,7 +165,7 @@ Clone's direct remote MCP endpoint is registered in `.mcp.json`:
     "clone": {
       "url": "https://api.clone.is/mcp",
       "headers": {
-        "X-Clone-API-Key": "${CLONE_API_TOKEN}"
+        "X-Clone-API-Key": "${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}"
       }
     }
   }
@@ -173,8 +178,9 @@ Smithery can also manage the same server:
 smithery mcp add clone/clone --headers '{"cloneApiKey":"your-clone-api-key"}'
 ```
 
-The plugin defaults to the direct endpoint so Claude Code only needs
-`CLONE_API_TOKEN`.
+The Stop hook defaults to the direct endpoint and falls back to the public YC
+reviewer demo key when `CLONE_API_TOKEN` is unset. Set `CLONE_API_TOKEN` to use
+your own Clone memory and avoid the shared demo environment.
 
 ## OS Setup
 
@@ -185,7 +191,6 @@ The plugin defaults to the direct endpoint so Claude Code only needs
 ### macOS / Linux
 
 ```bash
-export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 command -v bash node perl sed awk
 claude plugin validate .
 ```
@@ -193,7 +198,6 @@ claude plugin validate .
 ### Windows
 
 ```powershell
-$env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
 Get-Command node
 Get-Command perl
 Get-Command sed
@@ -343,10 +347,12 @@ Plugin install IDs use `plugin@marketplace` order. For this repository, the
 plugin is `clone` and the marketplace is `clone-labs`, so the install ID is
 `clone@clone-labs`.
 
+Set `CLONE_API_TOKEN` before launching Claude Code to use your own Clone
+memory. If it is unset, Clone Loop uses the public YC reviewer demo key.
+
 ### macOS / Linux: Clone Labs Marketplace Install
 
 ```bash
-export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 claude plugin marketplace add cloneisyou/clone-claude-plugin@main
 claude plugin install clone@clone-labs --scope user
 claude
@@ -361,7 +367,6 @@ Then run inside Claude Code:
 ### Windows PowerShell: Clone Labs Marketplace Install
 
 ```powershell
-$env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
 claude.exe plugin marketplace add cloneisyou/clone-claude-plugin@main
 claude.exe plugin install clone@clone-labs --scope user
 claude.exe
@@ -402,7 +407,6 @@ commit-based versioning.
 git clone https://github.com/cloneisyou/clone-claude-plugin.git
 cd clone-claude-plugin
 git checkout main
-export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 claude --plugin-dir .
 ```
 
@@ -418,7 +422,6 @@ Then run inside Claude Code:
 git clone https://github.com/cloneisyou/clone-claude-plugin.git
 Set-Location clone-claude-plugin
 git checkout main
-$env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
 claude.exe --plugin-dir .
 ```
 
@@ -436,7 +439,6 @@ Use this only while developing the plugin from a local clone.
 git clone https://github.com/cloneisyou/clone-claude-plugin.git
 cd clone-claude-plugin
 git checkout main
-export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
 claude plugin marketplace add . --scope user
 claude plugin install clone@clone-labs --scope user
 ```
@@ -445,7 +447,6 @@ claude plugin install clone@clone-labs --scope user
 git clone https://github.com/cloneisyou/clone-claude-plugin.git
 Set-Location clone-claude-plugin
 git checkout main
-$env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
 claude.exe plugin marketplace add . --scope user
 claude.exe plugin install clone@clone-labs --scope user
 ```
@@ -467,8 +468,9 @@ claude.exe plugin install clone@claude-plugins-official --scope user
 ```
 
 To pin a frozen version for session-only use, replace `main` with
-`clone-plugin-v0.2.3` for the current v2 release,
-`clone-plugin-v0.2.2` for the Windows launcher release,
+`clone-plugin-v0.2.4` for the current v2 release,
+`clone-plugin-v0.2.3` for the Windows launcher release,
+`clone-plugin-v0.2.2` for the command cleanup release,
 `clone-plugin-v0.2.1` for the previous v2 release,
 `clone-plugin-v0.2.0` for the initial v2 release, or
 `clone-plugin-v0.1.0` for v1.

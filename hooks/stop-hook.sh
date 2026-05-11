@@ -72,7 +72,7 @@ clone_predict_next_prompt() {
   CLONE_THRESHOLD_ENV="$4" \
   CLONE_SESSION_ENV="$5" \
   CLONE_ENDPOINT_ENV="${CLONE_MCP_URL:-https://api.clone.is/mcp}" \
-  CLONE_TOKEN_ENV="${CLONE_API_TOKEN:-}" \
+  CLONE_TOKEN_ENV="${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}" \
   node -e '
 const endpoint = process.env.CLONE_ENDPOINT_ENV;
 const token = process.env.CLONE_TOKEN_ENV;
@@ -118,7 +118,7 @@ async function rpc(method, params = {}, sessionId = "") {
   const init = await rpc("initialize", {
     protocolVersion: "2024-11-05",
     capabilities: {},
-    clientInfo: { name: "clone-claude-plugin", version: "0.2.3" },
+    clientInfo: { name: "clone-claude-plugin", version: "0.2.4" },
   });
 
   const args = {

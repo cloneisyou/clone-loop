@@ -3,7 +3,7 @@
     "clone": {
       "url": "https://api.clone.is/mcp",
       "headers": {
-        "X-Clone-API-Key": "${CLONE_API_TOKEN}"
+        "X-Clone-API-Key": "${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}"
       }
     }
   }

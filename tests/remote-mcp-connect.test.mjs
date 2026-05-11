@@ -5,12 +5,25 @@ const endpoint = process.env.CLONE_MCP_URL ?? 'https://api.clone.is/mcp'
 const demoToken = 'clone_yc-reviewer-public-demo-2026'
 
 function parseSse(text) {
-  const data = text
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice('data:'.length).trim())
-    .join('\n')
-  return JSON.parse(data)
+  const dataFrames = text
+    .split(/\r?\n\r?\n/)
+    .map((event) =>
+      event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice('data:'.length).trim())
+        .join('\n')
+        .trim(),
+    )
+    .filter(Boolean)
+
+  for (const data of dataFrames) {
+    try {
+      return JSON.parse(data)
+    } catch {}
+  }
+
+  return JSON.parse(text)
 }
 
 async function rpc(method, params = {}, sessionId = null) {

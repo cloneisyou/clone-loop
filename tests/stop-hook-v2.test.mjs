@@ -40,16 +40,22 @@ ${state.prompt}
   )
 }
 
-function runHook(workdir, endpoint) {
+function runHook(workdir, endpoint, options = {}) {
   return new Promise((resolveRun) => {
+    const env = {
+      ...process.env,
+      CLAUDE_PLUGIN_ROOT: pluginRoot,
+      CLONE_MCP_URL: endpoint,
+    }
+    if (options.withToken !== false) {
+      env.CLONE_API_TOKEN = 'test-token'
+    } else {
+      delete env.CLONE_API_TOKEN
+    }
+
     const child = spawn(process.execPath, [launcherPath, 'hooks/stop-hook.sh'], {
       cwd: workdir,
-      env: {
-        ...process.env,
-        CLAUDE_PLUGIN_ROOT: pluginRoot,
-        CLONE_MCP_URL: endpoint,
-        CLONE_API_TOKEN: 'test-token',
-      },
+      env,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 
@@ -226,6 +232,40 @@ describe('Clone Loop v2 stop hook', () => {
         assert.equal(output.decision, 'block')
         assert.match(output.reason, /not confident enough/i)
         assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md')))
+      },
+    )
+  })
+
+  it('uses the public demo Clone API key when CLONE_API_TOKEN is unset', async () => {
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'prediction-3',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Run one more check.',
+        confidence: 0.9,
+        reasoning: 'The user usually verifies before completion.',
+        candidates: [],
+        k: 1,
+        model: 'test-model',
+        latency_ms: 8,
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, { withToken: false })
+
+        assert.equal(
+          result.status,
+          0,
+          JSON.stringify(
+            { error: result.error?.message, signal: result.signal, stdout: result.stdout, stderr: result.stderr, calls },
+            null,
+            2,
+          ),
+        )
+        assert.equal(calls[0].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
+        assert.equal(calls[1].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
       },
     )
   })
