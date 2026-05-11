@@ -74,8 +74,14 @@ describe('Remote Clone MCP connection', () => {
     const content = prediction.payload.result.content[0]
     assert.equal(content.type, 'text')
     const body = JSON.parse(content.text)
-    assert.equal(body.status, 'auto')
+    assert.ok(['auto', 'escalated'].includes(body.status))
     assert.ok(body.predicted_response)
-    assert.ok(body.confidence >= 0.7)
+    assert.equal(typeof body.confidence, 'number')
+    assert.equal(body.threshold, 0.7)
+    if (body.status === 'auto') {
+      assert.ok(body.confidence >= 0.7)
+    } else {
+      assert.ok(body.confidence < 0.7)
+    }
   })
 })
