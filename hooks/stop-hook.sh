@@ -118,7 +118,7 @@ async function rpc(method, params = {}, sessionId = "") {
   const init = await rpc("initialize", {
     protocolVersion: "2024-11-05",
     capabilities: {},
-    clientInfo: { name: "clone-claude-plugin", version: "0.2.1" },
+    clientInfo: { name: "clone-claude-plugin", version: "0.2.2" },
   });
 
   const args = {

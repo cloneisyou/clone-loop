@@ -82,9 +82,7 @@ The plugin is organized around Clone Loop names only:
 ```text
 .claude-plugin/plugin.json     Plugin metadata for Claude Code.
 commands/loop.md               Starts Clone Loop with /clone:loop.
-commands/clone-loop.md         Hidden explicit Clone Loop command entry.
 commands/cancel-loop.md        Cancels the active Clone Loop.
-commands/cancel-clone-loop.md  Hidden explicit cancel command entry.
 commands/help.md               Explains Clone Loop to the user.
 hooks/hooks.json               Registers a Stop hook.
 hooks/stop-hook.sh             Blocks stop and injects Clone predictions.
@@ -316,11 +314,21 @@ claude.exe plugin validate .
 > [!TIP]
 > Use v2 by default. It is the hook-mediated Clone MCP version.
 
+> [!IMPORTANT]
+> The `clone-labs` marketplace below is the Clone Labs marketplace hosted from
+> this GitHub repository. It is not the official Anthropic
+> `claude-plugins-official` marketplace. Official listing requires submission
+> through the Claude plugin directory.
+
 > [!NOTE]
 > This repository contains only the Clone Claude Code plugin. The main Clone
 > monorepo consumes it as a git submodule.
 
-### macOS / Linux: GitHub Marketplace Install
+Plugin install IDs use `plugin@marketplace` order. For this repository, the
+plugin is `clone` and the marketplace is `clone-labs`, so the install ID is
+`clone@clone-labs`.
+
+### macOS / Linux: Clone Labs Marketplace Install
 
 ```bash
 export CLONE_API_TOKEN="clone_yc-reviewer-public-demo-2026"
@@ -335,7 +343,7 @@ Then run inside Claude Code:
 /clone:loop "Run tests and fix any failures" --max-iterations 5 --clone-threshold 0.8
 ```
 
-### Windows PowerShell: GitHub Marketplace Install
+### Windows PowerShell: Clone Labs Marketplace Install
 
 ```powershell
 $env:CLONE_API_TOKEN = "clone_yc-reviewer-public-demo-2026"
@@ -349,6 +357,25 @@ Then run inside Claude Code:
 ```text
 /clone:loop "Run tests and fix any failures" --max-iterations 5 --clone-threshold 0.8
 ```
+
+### Updating from Clone Labs Marketplace
+
+Refresh the marketplace catalog, then update the installed plugin:
+
+```bash
+claude plugin marketplace update clone-labs
+claude plugin update clone@clone-labs
+```
+
+```powershell
+claude.exe plugin marketplace update clone-labs
+claude.exe plugin update clone@clone-labs
+```
+
+Because `.claude-plugin/plugin.json` declares an explicit plugin version,
+release updates should bump that version before users run `claude plugin
+update`. If the version is removed, git-hosted marketplace installs fall back to
+commit-based versioning.
 
 > [!NOTE]
 > Session-only mode is best for trying a local checkout without changing your
@@ -408,12 +435,13 @@ claude.exe plugin marketplace add . --scope user
 claude.exe plugin install clone@clone-labs --scope user
 ```
 
-### Published Plugin
+### Official Claude Plugin Directory
 
 > [!NOTE]
-> These commands apply after Clone is published to a Claude plugin marketplace.
+> These commands apply only after Clone is accepted into the official Claude
+> plugin directory, surfaced in Claude Code as `claude-plugins-official`.
 
-After Clone is published to the Claude plugin directory:
+After Clone is published to the official Claude plugin directory:
 
 ```bash
 claude plugin install clone@claude-plugins-official --scope user
@@ -424,7 +452,8 @@ claude.exe plugin install clone@claude-plugins-official --scope user
 ```
 
 To pin a frozen version for session-only use, replace `main` with
-`clone-plugin-v0.2.1` for the current v2 release,
+`clone-plugin-v0.2.2` for the current v2 release,
+`clone-plugin-v0.2.1` for the previous v2 release,
 `clone-plugin-v0.2.0` for the initial v2 release, or
 `clone-plugin-v0.1.0` for v1.
 

@@ -1,19 +1,19 @@
 ---
 description: "Start a Clone Loop in the current session"
 argument-hint: "PROMPT [--max-iterations N] [--completion-promise TEXT] [--clone-threshold N] [--clone-k N]"
-allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/setup-clone-loop.sh:*)"]
+allowed-tools: Bash(bash *setup-clone-loop.sh*)
 hide-from-slash-command-tool: "true"
 ---
 
 # Clone Loop Command
 
-Execute the setup script to initialize the Clone Loop:
+Use the Bash tool to execute the setup script and initialize the Clone Loop:
 
-```!
-"${CLAUDE_PLUGIN_ROOT}/scripts/setup-clone-loop.sh" $ARGUMENTS
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-clone-loop.sh" $ARGUMENTS
 ```
 
-Please work on the task.
+If setup succeeds, please work on the task.
 
 When you try to exit, the Clone Loop stop hook will block the stop, call Clone MCP directly to predict the next user prompt, and pass the prediction to you only when it clears the configured confidence threshold. You will still see your previous work in files and git history, allowing you to iterate and improve.
 

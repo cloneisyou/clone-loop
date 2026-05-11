@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 const root = new URL('../', import.meta.url)
@@ -21,9 +21,7 @@ describe('Clone Claude plugin contract', () => {
     const pluginFiles = [
       '.claude-plugin/plugin.json',
       '.mcp.json',
-      'commands/cancel-clone-loop.md',
       'commands/cancel-loop.md',
-      'commands/clone-loop.md',
       'commands/help.md',
       'commands/loop.md',
       'hooks/hooks.json',
@@ -36,6 +34,14 @@ describe('Clone Claude plugin contract', () => {
     for (const file of pluginFiles) {
       assert.equal(existsSync(new URL(file, root)), true, `${file} exists`)
     }
+  })
+
+  it('publishes only the supported public slash commands', () => {
+    const commandFiles = readdirSync(new URL('commands/', root))
+      .filter((file) => file.endsWith('.md'))
+      .sort()
+
+    assert.deepEqual(commandFiles, ['cancel-loop.md', 'help.md', 'loop.md'])
   })
 
   it('registers the remote Clone MCP server for Claude Code', () => {
@@ -54,6 +60,18 @@ describe('Clone Claude plugin contract', () => {
 
     assert.match(readme, /\/clone:loop/)
     assert.match(loopCommand, /# Clone Loop Command/)
+  })
+
+  it('runs Clone Loop setup through the Bash tool instead of shell pre-execution', () => {
+    const loopCommand = read('commands/loop.md')
+
+    assert.match(loopCommand, /allowed-tools: Bash\(bash \*setup-clone-loop\.sh\*\)/)
+    assert.match(
+      loopCommand,
+      /bash "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/setup-clone-loop\.sh" \$ARGUMENTS/,
+    )
+    assert.match(loopCommand, /Use the Bash tool/)
+    assert.doesNotMatch(loopCommand, /```!/)
   })
 
   it('persists Clone prediction settings when starting a Clone Loop', () => {
