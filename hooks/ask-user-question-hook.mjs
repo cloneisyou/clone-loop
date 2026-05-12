@@ -3,6 +3,12 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
+import {
+  HISTORY_WINDOW_TURNS,
+  assistantTextsThisIteration,
+  formatConversationHistory,
+  loadInjectedUserTurns,
+} from '../scripts/conversation-context.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
@@ -280,12 +286,68 @@ function formatOptions(options) {
     .join('\n')
 }
 
-function buildQuestionAgentInput({ state, question, questionIndex, questionCount, threshold }) {
-  return `Original Clone Loop prompt:
-${state.prompt.trim()}
+function safeAssistantTextsThisIteration(transcriptPath, sinceTs) {
+  if (!transcriptPath || !existsSync(transcriptPath)) return []
+  try {
+    return assistantTextsThisIteration(transcriptPath, sinceTs)
+  } catch {
+    return []
+  }
+}
 
-Clone Loop iteration: ${state.frontmatter.iteration || 'unknown'}
-Clone threshold: ${threshold}
+function findLastContinueTs(historyPath) {
+  if (!historyPath || !existsSync(historyPath)) return ''
+  let raw
+  try {
+    raw = readFileSync(historyPath, 'utf8')
+  } catch {
+    return ''
+  }
+  let lastContinueTs = ''
+  let loopStartTs = ''
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    let record
+    try {
+      record = JSON.parse(line.replace(/^﻿/, ''))
+    } catch {
+      continue
+    }
+    if (!record || typeof record !== 'object') continue
+    const ts = typeof record.ts === 'string' ? record.ts : ''
+    if (!ts) continue
+    if (record.event === 'stop' && record.decision === 'continue') {
+      if (ts > lastContinueTs) lastContinueTs = ts
+    } else if (record.event === 'loop-start' && !loopStartTs) {
+      loopStartTs = ts
+    }
+  }
+  return lastContinueTs || loopStartTs || ''
+}
+
+function buildQuestionAgentInput({
+  state,
+  question,
+  questionIndex,
+  questionCount,
+  threshold,
+  transcriptPath,
+  historyPath,
+}) {
+  const injectedUserTurns = loadInjectedUserTurns(historyPath)
+  const sinceTs = findLastContinueTs(historyPath)
+  const assistantTexts = safeAssistantTextsThisIteration(transcriptPath, sinceTs)
+
+  const conversationContext = formatConversationHistory({
+    promptText: state.prompt,
+    iteration: state.frontmatter.iteration || 'unknown',
+    threshold,
+    injectedUserTurns,
+    assistantTexts,
+    windowTurns: HISTORY_WINDOW_TURNS,
+  })
+
+  return `${conversationContext}
 
 Claude called AskUserQuestion during the active Clone Loop.
 Predict the exact natural-language answer this user would give.
@@ -375,6 +437,8 @@ async function main() {
           questionIndex,
           questionCount: questions.length,
           threshold: cloneThreshold,
+          transcriptPath: hookInput.transcript_path ? String(hookInput.transcript_path) : '',
+          historyPath: LOOP_HISTORY_FILE,
         }),
         threshold: cloneThreshold,
         sessionId: hookSession,

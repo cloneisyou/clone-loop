@@ -3,6 +3,12 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
+import {
+  HISTORY_WINDOW_TURNS,
+  assistantTextsThisIteration,
+  formatConversationHistory,
+  loadInjectedUserTurns,
+} from '../scripts/conversation-context.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
@@ -188,19 +194,34 @@ async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId 
   return JSON.parse(content.text)
 }
 
-function lastAssistantText(transcriptPath) {
-  const transcript = readFileSync(transcriptPath, 'utf8')
-  const texts = []
-  for (const line of transcript.split(/\r?\n/).filter(Boolean)) {
-    const parsed = JSON.parse(line.replace(/^\uFEFF/, ''))
-    if (parsed.message?.role !== 'assistant') continue
-    const content = parsed.message?.content
-    if (!Array.isArray(content)) continue
-    for (const block of content) {
-      if (block?.type === 'text') texts.push(block.text || '')
+function findLastContinueTs(historyPath) {
+  if (!historyPath || !existsSync(historyPath)) return ''
+  let raw
+  try {
+    raw = readFileSync(historyPath, 'utf8')
+  } catch {
+    return ''
+  }
+  let lastContinueTs = ''
+  let loopStartTs = ''
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    let record
+    try {
+      record = JSON.parse(line.replace(/^\uFEFF/, ''))
+    } catch {
+      continue
+    }
+    if (!record || typeof record !== 'object') continue
+    const ts = typeof record.ts === 'string' ? record.ts : ''
+    if (!ts) continue
+    if (record.event === 'stop' && record.decision === 'continue') {
+      if (ts > lastContinueTs) lastContinueTs = ts
+    } else if (record.event === 'loop-start' && !loopStartTs) {
+      loopStartTs = ts
     }
   }
-  return texts.at(-1) || ''
+  return lastContinueTs || loopStartTs || ''
 }
 
 async function main() {
@@ -252,29 +273,29 @@ async function main() {
     return
   }
 
-  let lastOutput = hookInput.last_assistant_message ? String(hookInput.last_assistant_message) : ''
-  if (!lastOutput) {
-    const transcriptPath = hookInput.transcript_path ? String(hookInput.transcript_path) : ''
-    if (!transcriptPath || !existsSync(transcriptPath)) {
-      console.error('Clone Loop: Transcript file not found; stopping.')
-      removeState()
-      return
-    }
+  const transcriptPath = hookInput.transcript_path ? String(hookInput.transcript_path) : ''
+  const sinceTs = findLastContinueTs(LOOP_HISTORY_FILE)
 
+  let assistantTexts = []
+  if (transcriptPath && existsSync(transcriptPath)) {
     try {
-      lastOutput = lastAssistantText(transcriptPath)
+      assistantTexts = assistantTextsThisIteration(transcriptPath, sinceTs)
     } catch (error) {
-      console.error('Clone Loop: Failed to parse assistant message JSON.')
+      console.error('Clone Loop: Failed to parse transcript JSON; falling back to last_assistant_message.')
       console.error(`Error: ${error?.message || String(error)}`)
-      removeState()
-      return
+      assistantTexts = []
     }
+  }
 
-    if (!lastOutput) {
-      console.error('Clone Loop: No assistant messages found; stopping.')
-      removeState()
-      return
-    }
+  if (!assistantTexts.length) {
+    const fallback = hookInput.last_assistant_message ? String(hookInput.last_assistant_message) : ''
+    assistantTexts = fallback ? [fallback] : []
+  }
+
+  if (!assistantTexts.length) {
+    console.error('Clone Loop: No assistant messages found; stopping.')
+    removeState()
+    return
   }
 
   const promptText = state.prompt.trim()
@@ -289,14 +310,15 @@ async function main() {
 
   const systemMessage = `Clone Loop iteration ${nextIteration}.`
 
-  const agentInput = `Original Clone Loop prompt:
-${promptText}
-
-Clone Loop iteration: ${nextIteration}
-Clone threshold: ${cloneThreshold}
-
-Claude last_assistant_message:
-${lastOutput}`
+  const injectedUserTurns = loadInjectedUserTurns(LOOP_HISTORY_FILE)
+  const agentInput = formatConversationHistory({
+    promptText,
+    iteration: nextIteration,
+    threshold: cloneThreshold,
+    injectedUserTurns,
+    assistantTexts,
+    windowTurns: HISTORY_WINDOW_TURNS,
+  })
 
   let prediction
   try {

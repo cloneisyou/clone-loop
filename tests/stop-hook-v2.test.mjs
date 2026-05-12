@@ -103,12 +103,18 @@ function runHook(workdir, endpoint, options = {}) {
       resolveRun({ status: null, signal: null, stdout, stderr, error })
     })
 
-    child.stdin.end(
-      JSON.stringify({
-        session_id: 'session-123',
-        last_assistant_message: 'Tests passed. What next?',
-      }),
-    )
+    const stdinPayload = {
+      session_id: options.sessionId || 'session-123',
+    }
+    if (Object.hasOwn(options, 'lastAssistantMessage')) {
+      if (options.lastAssistantMessage) stdinPayload.last_assistant_message = options.lastAssistantMessage
+    } else {
+      stdinPayload.last_assistant_message = 'Tests passed. What next?'
+    }
+    if (options.transcriptPath) {
+      stdinPayload.transcript_path = options.transcriptPath
+    }
+    child.stdin.end(JSON.stringify(stdinPayload))
   })
 }
 
@@ -365,6 +371,229 @@ describe('Clone Loop v2 stop hook', () => {
     } finally {
       rmSync(pluginDataDir, { recursive: true, force: true })
     }
+  })
+
+  it('injects multi-turn history with previously predicted prompts', async () => {
+    writeState(workdir)
+    mkdirSync(join(workdir, '.claude'), { recursive: true })
+    const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
+    writeFileSync(
+      historyPath,
+      [
+        JSON.stringify({
+          ts: '2026-01-01T00:00:01Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 1,
+          confidence: 0.9,
+          threshold: 0.8,
+          prediction_id: 'p-1',
+          status: 'auto',
+          predicted_response: 'Run lint after the tests pass.',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:05Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 2,
+          confidence: 0.92,
+          threshold: 0.8,
+          prediction_id: 'p-2',
+          status: 'auto',
+          predicted_response: 'Now open a draft PR with the diff.',
+        }),
+      ].join('\n') + '\n',
+    )
+
+    await withMcpServer(
+      {
+        id: 'prediction-history-1',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Continue.',
+        confidence: 0.9,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const agentInput = calls[1].params.arguments.agent_input
+        assert.match(agentInput, /Fix the bug and run tests/)
+        assert.match(agentInput, /### user \(clone-prediction\):/)
+        const firstIdx = agentInput.indexOf('Run lint after the tests pass.')
+        const secondIdx = agentInput.indexOf('Now open a draft PR with the diff.')
+        assert.notEqual(firstIdx, -1)
+        assert.notEqual(secondIdx, -1)
+        assert.ok(firstIdx < secondIdx, 'predicted prompts must appear in chronological order')
+      },
+    )
+  })
+
+  it('injects auto-answered questions into history', async () => {
+    writeState(workdir)
+    mkdirSync(join(workdir, '.claude'), { recursive: true })
+    const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
+    writeFileSync(
+      historyPath,
+      JSON.stringify({
+        ts: '2026-01-01T00:00:02Z',
+        event: 'ask-user-question',
+        decision: 'auto-answer-freeform',
+        confidence: 0.91,
+        threshold: 0.8,
+        answers: { 'Should we open a PR?': 'Yes, open it as a draft.' },
+      }) + '\n',
+    )
+
+    await withMcpServer(
+      {
+        id: 'prediction-history-2',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Continue.',
+        confidence: 0.9,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const agentInput = calls[1].params.arguments.agent_input
+        assert.match(agentInput, /### user \(auto-answer\):/)
+        assert.match(agentInput, /Q: Should we open a PR\?/)
+        assert.match(agentInput, /A: Yes, open it as a draft\./)
+      },
+    )
+  })
+
+  it('truncates history to most recent N turns while preserving original prompt', async () => {
+    writeState(workdir)
+    mkdirSync(join(workdir, '.claude'), { recursive: true })
+    const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
+    const lines = []
+    for (let index = 1; index <= 30; index += 1) {
+      lines.push(
+        JSON.stringify({
+          ts: `2026-01-01T00:${String(index).padStart(2, '0')}:00Z`,
+          event: 'stop',
+          decision: 'continue',
+          iteration: index,
+          confidence: 0.9,
+          threshold: 0.8,
+          prediction_id: `p-${index}`,
+          status: 'auto',
+          predicted_response: `Predicted prompt number ${index}.`,
+        }),
+      )
+    }
+    writeFileSync(historyPath, lines.join('\n') + '\n')
+
+    await withMcpServer(
+      {
+        id: 'prediction-history-3',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Continue.',
+        confidence: 0.9,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const agentInput = calls[1].params.arguments.agent_input
+        assert.match(agentInput, /Original Clone Loop prompt:/)
+        assert.match(agentInput, /Fix the bug and run tests\./)
+
+        // The current iteration assistant text counts toward the window. With
+        // 30 user turns and 1 assistant turn, the cap of 20 keeps the latest
+        // 19 user turns plus the assistant turn. Predictions 12..30 should
+        // remain; 1..11 should be dropped.
+        for (let index = 12; index <= 30; index += 1) {
+          assert.match(
+            agentInput,
+            new RegExp(escapeRegExp(`Predicted prompt number ${index}.`)),
+            `expected window to keep prediction ${index}`,
+          )
+        }
+        for (let index = 1; index <= 11; index += 1) {
+          assert.doesNotMatch(
+            agentInput,
+            new RegExp(escapeRegExp(`Predicted prompt number ${index}.`)),
+            `expected window to drop prediction ${index}`,
+          )
+        }
+
+        const userMarkers = agentInput.match(/### user \(clone-prediction\):/g) || []
+        assert.equal(userMarkers.length, 19, 'exactly 19 user turns should remain in the window')
+      },
+    )
+  })
+
+  it('extracts all assistant texts from current iteration window', async () => {
+    writeState(workdir, { iteration: 2 })
+    mkdirSync(join(workdir, '.claude'), { recursive: true })
+    const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
+    writeFileSync(
+      historyPath,
+      JSON.stringify({
+        ts: '2026-01-01T00:00:10Z',
+        event: 'stop',
+        decision: 'continue',
+        iteration: 2,
+        confidence: 0.9,
+        threshold: 0.8,
+        prediction_id: 'p-cont',
+        status: 'auto',
+        predicted_response: 'Run focused tests next.',
+      }) + '\n',
+    )
+
+    const transcriptPath = join(workdir, 'transcript.jsonl')
+    const transcriptLines = [
+      {
+        timestamp: '2026-01-01T00:00:05Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'OLD assistant text before continue.' }] },
+      },
+      {
+        timestamp: '2026-01-01T00:00:15Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'NEW assistant text alpha.' }] },
+      },
+      {
+        timestamp: '2026-01-01T00:00:20Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Some user message ignored.' }] },
+      },
+      {
+        timestamp: '2026-01-01T00:00:25Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'NEW assistant text beta.' }] },
+      },
+    ]
+    writeFileSync(transcriptPath, transcriptLines.map((line) => JSON.stringify(line)).join('\n') + '\n')
+
+    await withMcpServer(
+      {
+        id: 'prediction-history-4',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Continue.',
+        confidence: 0.9,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, {
+          transcriptPath,
+          lastAssistantMessage: '',
+        })
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const agentInput = calls[1].params.arguments.agent_input
+        assert.match(agentInput, /### assistant \(current iter 3\):/)
+        assert.match(agentInput, /NEW assistant text alpha\./)
+        assert.match(agentInput, /NEW assistant text beta\./)
+        assert.doesNotMatch(agentInput, /OLD assistant text before continue\./)
+      },
+    )
   })
 
   it('prefers CLONE_API_TOKEN over a saved plugin API key', async () => {

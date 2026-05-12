@@ -145,13 +145,37 @@ once the prompt is behaving well.
 5. The hook keeps Clone Loop safety checks: session isolation, corrupted-state
    cleanup, max iterations, confidence threshold, and MCP failure escalation.
 6. If the loop continues, the hook calls Clone MCP `predict_next_prompt`
-   directly with the original prompt, iteration, threshold, and
-   `last_assistant_message`.
+   directly with the original prompt (always preserved verbatim), the
+   iteration number and threshold, a chronological multi-turn history of
+   Clone-injected user turns (predicted prompts plus auto-answered
+   `AskUserQuestion` Q/A pairs reconstructed from
+   `.claude/clone-loop.history.local.jsonl`), and every assistant text block
+   emitted during the current iteration (extracted from the transcript via
+   timestamp filtering). The combined history is capped at
+   `HISTORY_WINDOW_TURNS = 20` turns.
 7. If confidence clears the user-configured threshold, the hook passes the
    prediction payload to Claude. Claude evaluates it in context and continues
    as if the user had provided the predicted prompt.
 8. If confidence is too low or MCP fails, the loop state is removed and the
    human is asked to continue.
+
+### Conversation context window
+
+The Clone MCP `agent_input` is composed of three sections:
+
+- The original `/clone:loop` prompt (always preserved verbatim, never
+  trimmed).
+- A flattened conversation history of Clone-injected user turns and current-
+  iteration assistant text blocks, in chronological order.
+- The current iteration's accumulated assistant text, repeated verbatim at
+  the bottom so the most recent output is never dropped by the cap.
+
+The flattened history is capped at `HISTORY_WINDOW_TURNS = 20` turns. When
+the loop runs longer than that, the oldest turns in the history section roll
+off, but the original prompt and the freshest assistant block remain in
+their dedicated sections. The same context is reused by the AskUserQuestion
+PreToolUse hook so Clone sees the same conversation when predicting popup
+answers.
 
 ## Plugin Structure
 
@@ -165,6 +189,7 @@ hooks/hooks.json                 Registers Stop and AskUserQuestion hooks.
 hooks/stop-hook.mjs              Blocks stop and injects Clone predictions.
 hooks/ask-user-question-hook.mjs Answers AskUserQuestion during active loops.
 scripts/clone-auth.mjs           Resolves env, plugin config, and demo tokens.
+scripts/conversation-context.mjs Builds multi-turn agent_input from history.
 scripts/manage-api-key.mjs       Implements /clone:api-key.
 scripts/setup-clone-loop.mjs     Parses options and writes loop state.
 README.md                        User documentation.

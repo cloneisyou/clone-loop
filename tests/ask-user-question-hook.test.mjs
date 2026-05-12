@@ -355,6 +355,55 @@ describe('AskUserQuestion PreToolUse hook', () => {
     })
   })
 
+  it('includes prior Clone-injected user turns in the agent_input history', async () => {
+    writeState(workdir)
+    mkdirSync(join(workdir, '.claude'), { recursive: true })
+    writeFileSync(
+      join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
+      JSON.stringify({
+        ts: '2026-01-01T00:00:01Z',
+        event: 'stop',
+        decision: 'continue',
+        iteration: 1,
+        confidence: 0.9,
+        threshold: 0.8,
+        prediction_id: 'p-1',
+        status: 'auto',
+        predicted_response: 'Run lint after the tests pass.',
+      }) + '\n',
+    )
+
+    const toolInput = {
+      questions: [
+        {
+          question: 'Which option?',
+          options: [{ label: 'Run focused tests' }, { label: 'Open a PR' }],
+        },
+      ],
+    }
+
+    await withMcpServer(
+      {
+        id: 'question-prediction-history',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Run focused tests',
+        confidence: 0.91,
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, toolInput)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const agentInput = calls[1].params.arguments.agent_input
+        assert.match(agentInput, /### user \(clone-prediction\):/)
+        assert.match(agentInput, /Run lint after the tests pass\./)
+        assert.match(agentInput, /Which option\?/)
+        assert.match(agentInput, /Run focused tests/)
+        assert.match(agentInput, /Open a PR/)
+      },
+    )
+  })
+
   it('uses the public demo Clone API key when no env or plugin config token exists', async () => {
     writeState(workdir)
 
