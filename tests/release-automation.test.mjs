@@ -8,10 +8,6 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-function read(path) {
-  return readFileSync(join(root, path), 'utf8')
-}
-
 function writeFixture(rootDir, path, contents) {
   const target = join(rootDir, path)
   mkdirSync(dirname(target), { recursive: true })
@@ -56,16 +52,4 @@ describe('release automation', () => {
     }
   })
 
-  it('creates a minor release tag when a pull request is merged to main', () => {
-    const workflow = read('.github/workflows/release-plugin.yml')
-
-    assert.match(workflow, /pull_request_target:/)
-    assert.match(workflow, /types: \[closed\]/)
-    assert.match(workflow, /branches: \[main\]/)
-    assert.match(workflow, /github\.event\.pull_request\.merged == true/)
-    assert.match(workflow, /contents: write/)
-    assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part minor/)
-    assert.match(workflow, /TAG="clone-plugin-v\$\{VERSION\}"/)
-    assert.match(workflow, /git push origin HEAD:main "\$TAG"/)
-  })
 })

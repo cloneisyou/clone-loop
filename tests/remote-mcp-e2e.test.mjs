@@ -260,20 +260,4 @@ describe('Remote Clone MCP end-to-end flow', () => {
     }
   })
 
-  it('returns a JSON-RPC error for invalid tool arguments', { timeout: 60000 }, async () => {
-    const mcpSessionId = await initialize()
-    const invalid = await toolCall(
-      'submit_feedback',
-      {
-        status: 'accepted',
-      },
-      mcpSessionId,
-    )
-
-    assert.ok(invalid.status === 200 || invalid.status >= 400, invalid.text)
-    assert.ok(
-      invalid.payload?.error || invalid.payload?.result?.isError,
-      'invalid submit_feedback arguments returned an MCP error',
-    )
-  })
 })

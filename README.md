@@ -191,6 +191,7 @@ hooks/ask-user-question-hook.mjs Answers AskUserQuestion during active loops.
 scripts/clone-auth.mjs           Resolves env, plugin config, and demo tokens.
 scripts/conversation-context.mjs Builds multi-turn agent_input from history.
 scripts/manage-api-key.mjs       Implements /clone:api-key.
+scripts/manual-e2e-multiturn.mjs Manual live MCP smoke for the agent_input builder.
 scripts/setup-clone-loop.mjs     Parses options and writes loop state.
 README.md                        User documentation.
 LICENSE                          Apache-2.0 license.
@@ -236,15 +237,22 @@ Clone Loop hooks also check plugin config through `${CLAUDE_PLUGIN_DATA}`.
 Run local tests:
 
 ```bash
-npm test
-npm run test:mcp:e2e
+pnpm test
+pnpm run test:mcp:e2e
 ```
 
 PowerShell:
 
 ```powershell
-npm test
-npm run test:mcp:e2e
+pnpm test
+pnpm run test:mcp:e2e
+```
+
+For manual debugging of the multi-turn `agent_input` builder against the
+live Clone MCP endpoint:
+
+```bash
+node scripts/manual-e2e-multiturn.mjs
 ```
 
 Validate with Claude Code:
