@@ -65,7 +65,7 @@ function formatIterationPromptLine({ iteration, prompt }) {
     .split(/\r?\n/)
     .map((line) => line.trim())
   const continuation = remainingLines.length
-    ? `\n${purple(remainingLines.map((line) => `> ${line}`).join('\n'))}`
+    ? `\n${remainingLines.map((line) => purpleBold(`> ${line}`)).join('\n')}`
     : ''
   return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
 }

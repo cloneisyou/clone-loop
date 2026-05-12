@@ -101,7 +101,7 @@ function purpleBold(value) {
 function formatIterationPromptLine({ iteration, prompt }) {
   const [firstLine = '', ...remainingLines] = formatPromptLines(prompt)
   const continuation = remainingLines.length
-    ? `\n${purple(remainingLines.map((line) => `> ${line}`).join('\n'))}`
+    ? `\n${remainingLines.map((line) => purpleBold(`> ${line}`)).join('\n')}`
     : ''
   return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
 }
