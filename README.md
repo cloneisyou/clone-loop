@@ -9,8 +9,10 @@ continues only when the prediction clears the configured confidence threshold.
 During an active loop, Clone can also answer `AskUserQuestion` so the user does
 not have to handle the popup manually.
 
-Predicted prompts are rendered as a prominent bold neon-red block in Stop hook
-output, whether confidence clears the threshold or the loop escalates.
+Loop prompts are rendered as prominent bold purple `Iteration N : <prompt>`
+lines. `/clone:loop` prints the original user prompt as `Iteration 1`, and Stop
+hook predictions are printed with their continuation iteration number whether
+confidence clears the threshold or the loop escalates.
 
 ## Quick Install
 
@@ -42,9 +44,13 @@ Then set your API key and start a loop:
 
 Clone Loop resolves tokens in this order:
 
-1. `CLONE_API_TOKEN` environment variable.
+1. `CLONE_API_TOKEN` environment variable, after trimming whitespace.
 2. Plugin config in `${CLAUDE_PLUGIN_DATA}/auth.local.json`.
 3. Public demo fallback token.
+
+Unset or blank `CLONE_API_TOKEN` values are ignored, so Clone Loop falls through
+to plugin config or the public demo fallback instead of sending an empty API
+key.
 
 The recommended setup is to export `CLONE_API_TOKEN`, start Claude Code, then
 import that environment value into plugin data:
@@ -170,8 +176,8 @@ LICENSE                          Apache-2.0 license.
 - Claude Code with plugin support.
 - Node.js on `PATH`.
 - Optional `CLONE_API_TOKEN` exported in the shell that launches Claude Code.
-  If unset and no plugin config token exists, Clone Loop uses the public demo
-  fallback key.
+  If unset or blank and no plugin config token exists, Clone Loop uses the
+  public demo fallback key.
 
 Windows works from PowerShell or cmd. Git Bash is not required. Claude Code may
 still label shell-tool calls as `Bash` in the UI, but Clone's runtime path
@@ -199,8 +205,8 @@ Clone Loop hooks also check plugin config through `${CLAUDE_PLUGIN_DATA}`.
 
 > [!IMPORTANT]
 > Live MCP tests call the remote Clone MCP endpoint. They use
-> `CLONE_API_TOKEN` when set and the public demo fallback otherwise. Do not
-> record sensitive data with the demo fallback.
+> nonblank `CLONE_API_TOKEN` values when set and the public demo fallback
+> otherwise. Do not record sensitive data with the demo fallback.
 
 Run local tests:
 

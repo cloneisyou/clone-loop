@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const setupPath = join(pluginRoot, 'scripts', 'setup-clone-loop.mjs')
+const ANSI_BOLD = '\u001b[1m'
+const ANSI_PURPLE = '\u001b[35m'
+const ANSI_RESET = '\u001b[0m'
 
 describe('Clone Loop setup script', () => {
   it('runs with Node only and writes loop state', () => {
@@ -38,6 +41,10 @@ describe('Clone Loop setup script', () => {
         JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2),
       )
       assert.match(result.stdout, /Clone Loop activated/)
+      assert.ok(
+        result.stdout.includes(`${ANSI_BOLD}${ANSI_PURPLE}Iteration 1 : launcher smoke test${ANSI_RESET}`),
+        result.stdout,
+      )
 
       const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
       assert.match(state, /launcher smoke test/)

@@ -8,7 +8,7 @@ const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const CLIENT_VERSION = '0.2.7'
 const ANSI_BOLD = '\u001b[1m'
-const ANSI_NEON_RED = '\u001b[91m'
+const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
 
 function nowIso() {
@@ -74,30 +74,35 @@ function block(reason, systemMessage) {
   console.log(JSON.stringify({ decision: 'block', reason, systemMessage }, null, 2))
 }
 
-function formatBlockquote(value) {
+function formatPromptLines(value) {
   return String(value || '')
     .trim()
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .join('\n> ')
 }
 
-function neonRed(value) {
-  return `${ANSI_NEON_RED}${value}${ANSI_RESET}`
+function purple(value) {
+  return `${ANSI_PURPLE}${value}${ANSI_RESET}`
 }
 
-function neonRedBold(value) {
-  return `${ANSI_BOLD}${ANSI_NEON_RED}${value}${ANSI_RESET}`
+function purpleBold(value) {
+  return `${ANSI_BOLD}${ANSI_PURPLE}${value}${ANSI_RESET}`
 }
 
-function formatPredictedPromptSection({ predictedResponse, predictedConfidence, cloneThreshold, prediction }) {
-  return `${neonRedBold("**Clone predicted the user's next prompt**")}
+function formatIterationPromptLine({ iteration, prompt }) {
+  const [firstLine = '', ...remainingLines] = formatPromptLines(prompt)
+  const continuation = remainingLines.length
+    ? `\n${purple(remainingLines.map((line) => `> ${line}`).join('\n'))}`
+    : ''
+  return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
+}
+
+function formatPredictedPromptSection({ iteration, predictedResponse, predictedConfidence, cloneThreshold, prediction }) {
+  return `${formatIterationPromptLine({ iteration, prompt: predictedResponse })}
 
 Confidence: ${predictedConfidence} / threshold: ${cloneThreshold}
 Prediction status: ${prediction.status || ''}
-Prediction id: ${prediction.id || ''}
-
-${neonRed(`> ${formatBlockquote(predictedResponse)}`)}`
+Prediction id: ${prediction.id || ''}`
 }
 
 function isIntegerString(value) {
@@ -335,6 +340,7 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
 
   if (Number.isFinite(Number(predictedConfidence)) && Number(predictedConfidence) >= Number(cloneThreshold)) {
     const predictedPromptSection = formatPredictedPromptSection({
+      iteration: nextIteration,
       predictedResponse,
       predictedConfidence,
       cloneThreshold,
@@ -379,6 +385,7 @@ ${predictedPromptSection}`)
   })
   removeState()
   const predictedPromptSection = formatPredictedPromptSection({
+    iteration: nextIteration,
     predictedResponse,
     predictedConfidence,
     cloneThreshold,

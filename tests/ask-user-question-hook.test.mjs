@@ -48,7 +48,9 @@ function runHook(workdir, endpoint, toolInput, options = {}) {
     } else {
       delete env.CLAUDE_PLUGIN_DATA
     }
-    if (options.withToken !== false) {
+    if (Object.hasOwn(options, 'cloneApiToken')) {
+      env.CLONE_API_TOKEN = options.cloneApiToken
+    } else if (options.withToken !== false) {
       env.CLONE_API_TOKEN = options.token || 'test-token'
     } else {
       delete env.CLONE_API_TOKEN
@@ -373,6 +375,32 @@ describe('AskUserQuestion PreToolUse hook', () => {
         )
 
         assert.equal(result.status, 0)
+        assert.equal(calls[0].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
+        assert.equal(calls[1].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
+      },
+    )
+  })
+
+  it('uses the public demo Clone API key when CLONE_API_TOKEN is blank', async () => {
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'question-prediction-blank-token',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Run focused tests.',
+        confidence: 0.91,
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(
+          workdir,
+          endpoint,
+          { questions: [{ question: 'Continue?', options: [{ label: 'Run tests' }, { label: 'Open PR' }] }] },
+          { cloneApiToken: '   ' },
+        )
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
         assert.equal(calls[0].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
         assert.equal(calls[1].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
       },

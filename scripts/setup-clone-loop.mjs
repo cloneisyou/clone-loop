@@ -8,6 +8,9 @@ const promptParts = []
 let maxIterations = '0'
 let cloneThreshold = '0.8'
 let cloneAgent = 'Claude Code Clone Loop'
+const ANSI_BOLD = '\u001b[1m'
+const ANSI_PURPLE = '\u001b[35m'
+const ANSI_RESET = '\u001b[0m'
 
 function usage() {
   console.log(`Clone Loop - iterative development loop with Clone-predicted next prompts
@@ -46,6 +49,25 @@ function isThreshold(value) {
 
 function quoteYaml(value) {
   return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function purple(value) {
+  return `${ANSI_PURPLE}${value}${ANSI_RESET}`
+}
+
+function purpleBold(value) {
+  return `${ANSI_BOLD}${ANSI_PURPLE}${value}${ANSI_RESET}`
+}
+
+function formatIterationPromptLine({ iteration, prompt }) {
+  const [firstLine = '', ...remainingLines] = String(prompt || '')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+  const continuation = remainingLines.length
+    ? `\n${purple(remainingLines.map((line) => `> ${line}`).join('\n'))}`
+    : ''
+  return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
 }
 
 for (let index = 0; index < args.length;) {
@@ -142,4 +164,4 @@ the next user prompt and continue only when confidence clears the threshold.
 
 To monitor: head -10 .claude/clone-loop.local.md`)
 
-console.log(`\n${prompt}`)
+console.log(`\n${formatIterationPromptLine({ iteration: 1, prompt })}`)

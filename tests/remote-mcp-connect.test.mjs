@@ -4,6 +4,10 @@ import { describe, it } from 'node:test'
 const endpoint = process.env.CLONE_MCP_URL ?? 'https://api.clone.is/mcp'
 const demoToken = 'clone_yc-reviewer-public-demo-2026'
 
+function cloneApiToken() {
+  return process.env.CLONE_API_TOKEN?.trim() || demoToken
+}
+
 function parseSse(text) {
   const dataFrames = text
     .split(/\r?\n\r?\n/)
@@ -30,7 +34,7 @@ async function rpc(method, params = {}, sessionId = null) {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
-    'X-Clone-API-Key': process.env.CLONE_API_TOKEN ?? demoToken,
+    'X-Clone-API-Key': cloneApiToken(),
   }
   if (sessionId) headers['mcp-session-id'] = sessionId
 

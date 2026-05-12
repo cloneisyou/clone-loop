@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 const endpoint = process.env.CLONE_MCP_URL ?? 'https://api.clone.is/mcp'
-const token = process.env.CLONE_API_TOKEN || 'clone_yc-reviewer-public-demo-2026'
+const demoToken = 'clone_yc-reviewer-public-demo-2026'
+
+function cloneApiToken() {
+  return process.env.CLONE_API_TOKEN?.trim() || demoToken
+}
 
 function parseSse(text) {
   const dataFrames = text
@@ -30,7 +34,7 @@ async function rpc(method, params = {}, mcpSessionId = null) {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
-    'X-Clone-API-Key': token,
+    'X-Clone-API-Key': cloneApiToken(),
   }
   if (mcpSessionId) headers['mcp-session-id'] = mcpSessionId
 

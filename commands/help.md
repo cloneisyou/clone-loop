@@ -60,7 +60,7 @@ Manage the Clone API key used by Clone Loop.
 /clone:api-key clear
 ```
 
-Token priority is `CLONE_API_TOKEN`, then plugin config, then demo fallback.
+Token priority is nonblank `CLONE_API_TOKEN`, then plugin config, then demo fallback.
 Prefer `import-env` over `set <key>` because direct slash-command arguments can
 remain in the transcript.
 
@@ -80,7 +80,7 @@ Cancel an active Clone Loop.
 
 Clone Loop resolves API keys in this order:
 
-1. `CLONE_API_TOKEN` from the Claude Code process environment.
+1. Nonblank `CLONE_API_TOKEN` from the Claude Code process environment.
 2. Saved plugin config in `${CLAUDE_PLUGIN_DATA}/auth.local.json`.
 3. The public demo fallback token.
 

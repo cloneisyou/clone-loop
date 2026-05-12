@@ -178,12 +178,13 @@ describe('Clone Claude plugin contract', () => {
     assert.doesNotMatch(stopHook, /Git Bash/)
   })
 
-  it('formats predicted prompts as a prominent neon red block', () => {
+  it('formats predicted prompts as a prominent purple iteration line', () => {
     const hook = read('hooks/stop-hook.mjs')
 
-    assert.match(hook, /ANSI_NEON_RED = '\\u001b\[91m'/)
-    assert.match(hook, /neonRedBold\("\*\*Clone predicted the user's next prompt\*\*"\)/)
+    assert.match(hook, /ANSI_PURPLE = '\\u001b\[35m'/)
+    assert.match(hook, /formatIterationPromptLine/)
+    assert.match(hook, /`Iteration \$\{iteration\} : \$\{firstLine\}`/)
     assert.match(hook, /Confidence: \$\{predictedConfidence\} \/ threshold: \$\{cloneThreshold\}/)
-    assert.match(hook, /neonRed\(`> \$\{formatBlockquote\(predictedResponse\)\}`\)/)
+    assert.match(hook, /formatIterationPromptLine\(\{ iteration, prompt: predictedResponse \}\)/)
   })
 })

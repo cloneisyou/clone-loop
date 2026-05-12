@@ -10,13 +10,14 @@ import { fileURLToPath } from 'node:url'
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'hooks', 'stop-hook.mjs')
 const ANSI_BOLD = '\u001b[1m'
-const ANSI_NEON_RED = '\u001b[91m'
+const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
-const NEON_RED_BOLD_HEADING = `${ANSI_BOLD}${ANSI_NEON_RED}**Clone predicted the user's next prompt**${ANSI_RESET}`
 
-function assertProminentPredictedPrompt(reason, predictedResponse) {
-  assert.match(reason, new RegExp(escapeRegExp(NEON_RED_BOLD_HEADING)))
-  assert.match(reason, new RegExp(escapeRegExp(`${ANSI_NEON_RED}> ${predictedResponse}${ANSI_RESET}`)))
+function assertProminentPredictedPrompt(reason, iteration, predictedResponse) {
+  assert.match(
+    reason,
+    new RegExp(escapeRegExp(`${ANSI_BOLD}${ANSI_PURPLE}Iteration ${iteration} : ${predictedResponse}${ANSI_RESET}`)),
+  )
 }
 
 function escapeRegExp(value) {
@@ -25,7 +26,7 @@ function escapeRegExp(value) {
 
 function writeState(workdir, overrides = {}) {
   const state = {
-    iteration: 0,
+    iteration: 1,
     max_iterations: 3,
     session_id: 'session-123',
     clone_threshold: 0.8,
@@ -56,15 +57,19 @@ function runHook(workdir, endpoint, options = {}) {
       CLAUDE_PLUGIN_ROOT: pluginRoot,
       CLONE_MCP_URL: endpoint,
     }
+    if (Object.hasOwn(options, 'cloneApiToken')) {
+      env.CLONE_API_TOKEN = options.cloneApiToken
+    } else {
+      if (options.withToken !== false) {
+        env.CLONE_API_TOKEN = options.token || 'test-token'
+      } else {
+        delete env.CLONE_API_TOKEN
+      }
+    }
     if (options.pluginDataDir) {
       env.CLAUDE_PLUGIN_DATA = options.pluginDataDir
     } else {
       delete env.CLAUDE_PLUGIN_DATA
-    }
-    if (options.withToken !== false) {
-      env.CLONE_API_TOKEN = options.token || 'test-token'
-    } else {
-      delete env.CLONE_API_TOKEN
     }
 
     const child = spawn(process.execPath, [hookPath], {
@@ -206,11 +211,11 @@ describe('Clone Loop v2 stop hook', () => {
         assert.equal(output.decision, 'block')
         assert.match(output.reason, /Commit this and move on\./)
         assert.match(output.reason, /confidence 0\.91/)
-        assertProminentPredictedPrompt(output.reason, 'Commit this and move on.')
+        assertProminentPredictedPrompt(output.reason, 2, 'Commit this and move on.')
         assert.doesNotMatch(output.reason, /mcp__clone__predict_next_prompt/)
 
         const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
-        assert.match(state, /iteration: 1/)
+        assert.match(state, /iteration: 2/)
       },
     )
   })
@@ -246,7 +251,7 @@ describe('Clone Loop v2 stop hook', () => {
         const output = JSON.parse(result.stdout)
         assert.equal(output.decision, 'block')
         assert.match(output.reason, /not confident enough/i)
-        assertProminentPredictedPrompt(output.reason, 'Maybe run more tests?')
+        assertProminentPredictedPrompt(output.reason, 2, 'Maybe run more tests?')
         assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md')))
       },
     )
@@ -270,6 +275,40 @@ describe('Clone Loop v2 stop hook', () => {
       },
       async (endpoint, calls) => {
         const result = await runHook(workdir, endpoint, { withToken: false })
+
+        assert.equal(
+          result.status,
+          0,
+          JSON.stringify(
+            { error: result.error?.message, signal: result.signal, stdout: result.stdout, stderr: result.stderr, calls },
+            null,
+            2,
+          ),
+        )
+        assert.equal(calls[0].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
+        assert.equal(calls[1].headers['x-clone-api-key'], 'clone_yc-reviewer-public-demo-2026')
+      },
+    )
+  })
+
+  it('uses the public demo Clone API key when CLONE_API_TOKEN is blank', async () => {
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'prediction-blank-token',
+        status: 'auto',
+        threshold: 0.8,
+        predicted_response: 'Run one more check.',
+        confidence: 0.9,
+        reasoning: 'The user usually verifies before completion.',
+        candidates: [],
+        k: 1,
+        model: 'test-model',
+        latency_ms: 8,
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, { cloneApiToken: '   ' })
 
         assert.equal(
           result.status,
