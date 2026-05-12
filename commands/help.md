@@ -23,6 +23,11 @@ The loop runs inside the current Claude Code session:
 7. Claude evaluates the prediction in context and continues as if the user had provided the predicted prompt.
 8. The loop continues until the completion promise is detected or the max iteration limit is reached.
 
+During an active loop, Clone also watches `AskUserQuestion`. If Clone predicts
+an answer with enough confidence and the answer maps to exactly one option, the
+question is answered automatically. Otherwise Claude Code shows the normal
+human question.
+
 The self-reference comes from Claude seeing previous file changes and git history. Clone adds personalized next-prompt prediction between iterations.
 
 ## Available Commands
@@ -45,6 +50,18 @@ Start a Clone Loop in your current session.
 - `--clone-threshold <n>` - Confidence threshold for auto-continuation.
 - `--clone-k <n>` - Number of candidate prompts to request.
 - `--clone-agent <text>` - Agent label sent to Clone.
+
+### /clone:status
+
+Show the active Clone Loop status without modifying it.
+
+**Usage:**
+
+```bash
+/clone:status
+```
+
+Reports iteration, max iterations, completion promise, Clone threshold, k, agent, start time, session ID, and the original loop prompt. If no loop is active, reports that instead.
 
 ### /clone:cancel-loop
 

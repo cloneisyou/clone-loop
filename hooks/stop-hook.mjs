@@ -1,11 +1,25 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
+const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
-const CLIENT_VERSION = '0.2.5'
+const CLIENT_VERSION = '0.2.6'
+const ANSI_BOLD = '\u001b[1m'
+const ANSI_PURPLE = '\u001b[35m'
+const ANSI_RESET = '\u001b[0m'
+
+function nowIso() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+function appendHistory(record) {
+  try {
+    appendFileSync(LOOP_HISTORY_FILE, `${JSON.stringify({ ts: nowIso(), ...record })}\n`)
+  } catch {}
+}
 
 function readStdin() {
   return new Promise((resolveRead) => {
@@ -58,6 +72,32 @@ function removeState() {
 
 function block(reason, systemMessage) {
   console.log(JSON.stringify({ decision: 'block', reason, systemMessage }, null, 2))
+}
+
+function formatBlockquote(value) {
+  return String(value || '')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .join('\n> ')
+}
+
+function purple(value) {
+  return `${ANSI_PURPLE}${value}${ANSI_RESET}`
+}
+
+function purpleBold(value) {
+  return `${ANSI_BOLD}${ANSI_PURPLE}${value}${ANSI_RESET}`
+}
+
+function formatPredictedPromptSection({ predictedResponse, predictedConfidence, cloneThreshold, prediction }) {
+  return `${purpleBold("**Clone predicted the user's next prompt**")}
+
+Confidence: ${predictedConfidence} / threshold: ${cloneThreshold}
+Prediction status: ${prediction.status || ''}
+Prediction id: ${prediction.id || ''}
+
+${purple(`> ${formatBlockquote(predictedResponse)}`)}`
 }
 
 function isIntegerString(value) {
@@ -212,6 +252,12 @@ async function main() {
 
   if (Number(maxIterations) > 0 && Number(iteration) >= Number(maxIterations)) {
     console.log(`Clone Loop: Max iterations (${maxIterations}) reached.`)
+    appendHistory({
+      event: 'stop',
+      decision: 'max-iterations',
+      iteration: Number(iteration),
+      max_iterations: Number(maxIterations),
+    })
     removeState()
     return
   }
@@ -243,6 +289,12 @@ async function main() {
 
   if (completionPromise && normalizedPromiseText(lastOutput) === completionPromise) {
     console.log(`Clone Loop: Detected <promise>${completionPromise}</promise>`)
+    appendHistory({
+      event: 'stop',
+      decision: 'complete-promise',
+      iteration: Number(iteration),
+      completion_promise: completionPromise,
+    })
     removeState()
     return
   }
@@ -280,6 +332,12 @@ ${lastOutput}`
       sessionId: hookSession,
     })
   } catch (error) {
+    appendHistory({
+      event: 'stop',
+      decision: 'escalate-mcp-error',
+      iteration: nextIteration,
+      error: error?.message || String(error),
+    })
     removeState()
     block(`Clone Loop requires human escalation.
 
@@ -293,6 +351,13 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
   const predictedResponse = prediction.predicted_response || ''
   const predictedConfidence = prediction.confidence
   if (!predictedResponse || predictedConfidence == null) {
+    appendHistory({
+      event: 'stop',
+      decision: 'escalate-incomplete-prediction',
+      iteration: nextIteration,
+      prediction_id: prediction.id || null,
+      status: prediction.status || null,
+    })
     removeState()
     block('Clone Loop requires human escalation. Clone MCP returned an incomplete prediction, so the loop state file has been removed. Tell the user Clone was not confident enough and wait for human input.', 'Clone Loop stopped because Clone returned an incomplete prediction.')
     return
@@ -302,34 +367,69 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
     const promiseRule = completionPromise
       ? `Keep the Clone Loop completion promise rule: only output <promise>${completionPromise}</promise> when it is genuinely true.`
       : 'No completion promise is set for this Clone Loop.'
+    const predictedPromptSection = formatPredictedPromptSection({
+      predictedResponse,
+      predictedConfidence,
+      cloneThreshold,
+      prediction,
+    })
+
+    appendHistory({
+      event: 'stop',
+      decision: 'continue',
+      iteration: nextIteration,
+      confidence: Number(predictedConfidence),
+      threshold: Number(cloneThreshold),
+      prediction_id: prediction.id || null,
+      status: prediction.status || null,
+      predicted_response: predictedResponse,
+    })
 
     block(`You are continuing a Clone Loop.
 
-Clone predicted the user's next prompt with confidence ${predictedConfidence}:
+${predictedPromptSection}
 
-${predictedResponse}
-
-The user-configured confidence threshold (${cloneThreshold}) was met. Evaluate
+The user-configured confidence threshold was met. The prediction cleared
+confidence ${predictedConfidence}. Evaluate
 the prediction in context, then continue as if the user had provided the
 predicted prompt when it is consistent with the current task state.
-Prediction status: ${prediction.status || ''}
-Prediction id: ${prediction.id || ''}
 Prediction reasoning: ${prediction.reasoning || ''}
 
-${promiseRule}`, systemMessage)
+${promiseRule}`, `${systemMessage}
+
+${predictedPromptSection}`)
     return
   }
 
+  appendHistory({
+    event: 'stop',
+    decision: 'escalate-low-confidence',
+    iteration: nextIteration,
+    confidence: Number(predictedConfidence),
+    threshold: Number(cloneThreshold),
+    prediction_id: prediction.id || null,
+    status: prediction.status || null,
+    predicted_response: predictedResponse,
+  })
   removeState()
+  const predictedPromptSection = formatPredictedPromptSection({
+    predictedResponse,
+    predictedConfidence,
+    cloneThreshold,
+    prediction,
+  })
   block(`Clone Loop requires human escalation.
 
 Clone was not confident enough to continue automatically.
 - status: ${prediction.status || ''}
 - confidence: ${predictedConfidence}
 - threshold: ${cloneThreshold}
-- predicted_response: ${predictedResponse}
 
-The loop state file has been removed. Tell the user Clone was not confident enough and wait for human input.`, 'Clone Loop stopped because Clone confidence was below threshold.')
+${predictedPromptSection}
+
+The loop state file has been removed. Tell the user Clone was not confident enough and wait for human input.`, `Clone Loop stopped because Clone confidence was below threshold.
+
+${predictedPromptSection}`)
 }
 
 main().catch((error) => {

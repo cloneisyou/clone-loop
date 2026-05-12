@@ -24,6 +24,8 @@ describe('Clone Claude plugin contract', () => {
       'commands/cancel-loop.md',
       'commands/help.md',
       'commands/loop.md',
+      'commands/status.md',
+      'hooks/ask-user-question-hook.mjs',
       'hooks/hooks.json',
       'hooks/stop-hook.mjs',
       'LICENSE',
@@ -49,7 +51,7 @@ describe('Clone Claude plugin contract', () => {
       .filter((file) => file.endsWith('.md'))
       .sort()
 
-    assert.deepEqual(commandFiles, ['cancel-loop.md', 'help.md', 'loop.md'])
+    assert.deepEqual(commandFiles, ['cancel-loop.md', 'help.md', 'loop.md', 'status.md'])
   })
 
   it('registers the remote Clone MCP server for Claude Code', () => {
@@ -68,6 +70,16 @@ describe('Clone Claude plugin contract', () => {
 
     assert.match(readme, /\/clone:loop/)
     assert.match(loopCommand, /# Clone Loop Command/)
+  })
+
+  it('exposes /clone:status as a read-only inspector for the loop state', () => {
+    const statusCommand = read('commands/status.md')
+
+    assert.match(statusCommand, /# Clone Loop Status/)
+    assert.match(statusCommand, /\.claude\/clone-loop\.local\.md/)
+    assert.match(statusCommand, /Read\(\.claude\/clone-loop\.local\.md\)/)
+    assert.doesNotMatch(statusCommand, /\brm\b/)
+    assert.doesNotMatch(statusCommand, /writeFileSync/)
   })
 
   it('runs Clone Loop setup directly through Node instead of Bash scripts', () => {
@@ -100,6 +112,17 @@ describe('Clone Claude plugin contract', () => {
     )
   })
 
+  it('runs a PreToolUse hook for AskUserQuestion directly through Node', () => {
+    const hooks = JSON.parse(read('hooks/hooks.json'))
+    const askUserQuestion = hooks.hooks.PreToolUse.find((entry) => entry.matcher === 'AskUserQuestion')
+
+    assert.ok(askUserQuestion, 'AskUserQuestion PreToolUse hook is registered')
+    assert.equal(
+      askUserQuestion.hooks[0].command,
+      'node "${CLAUDE_PLUGIN_ROOT}/hooks/ask-user-question-hook.mjs"',
+    )
+  })
+
   it('persists Clone prediction settings when starting a Clone Loop', () => {
     const setup = read('scripts/setup-clone-loop.mjs')
 
@@ -126,5 +149,14 @@ describe('Clone Claude plugin contract', () => {
     assert.match(hook, /human escalation/)
     assert.doesNotMatch(hook, /mcp__clone__submit_feedback/)
     assert.doesNotMatch(hook, /Git Bash/)
+  })
+
+  it('formats confident predicted prompts as a prominent block', () => {
+    const hook = read('hooks/stop-hook.mjs')
+
+    assert.match(hook, /ANSI_PURPLE = '\\u001b\[35m'/)
+    assert.match(hook, /purpleBold\("\*\*Clone predicted the user's next prompt\*\*"\)/)
+    assert.match(hook, /Confidence: \$\{predictedConfidence\} \/ threshold: \$\{cloneThreshold\}/)
+    assert.match(hook, /purple\(`> \$\{formatBlockquote\(predictedResponse\)\}`\)/)
   })
 })

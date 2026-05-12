@@ -1,6 +1,17 @@
 {
-  "description": "Clone plugin stop hook for Clone Loops",
+  "description": "Clone plugin hooks for Clone Loops",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask-user-question-hook.mjs\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

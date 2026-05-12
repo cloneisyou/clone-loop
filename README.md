@@ -6,6 +6,8 @@ by Clone MCP next-prompt prediction.
 Clone Loop keeps Claude Code working inside the same session. When Claude tries
 to stop, the Stop hook calls Clone MCP, receives a predicted next prompt, and
 continues only when the prediction clears the configured confidence threshold.
+During an active loop, Clone can also answer `AskUserQuestion` choices when the
+predicted answer confidently maps to exactly one option.
 
 ## Quick Install
 
@@ -108,17 +110,19 @@ The plugin is organized around Clone Loop names only:
 .claude-plugin/plugin.json     Plugin metadata for Claude Code.
 commands/loop.md               Starts Clone Loop with /clone:loop.
 commands/cancel-loop.md        Cancels the active Clone Loop.
+commands/status.md             Reports active Clone Loop state (read-only).
 commands/help.md               Explains Clone Loop to the user.
-hooks/hooks.json               Registers a Stop hook.
+hooks/hooks.json               Registers Stop and AskUserQuestion hooks.
 hooks/stop-hook.mjs            Blocks stop and injects Clone predictions.
+hooks/ask-user-question-hook.mjs Answers AskUserQuestion during active loops.
 scripts/setup-clone-loop.mjs   Parses options and writes loop state.
 README.md                      User documentation.
 LICENSE                        Apache-2.0 license.
 ```
 
-The primary user commands are `/clone:loop` and `/clone:cancel-loop`. Loop state
-lives in `.claude/clone-loop.local.md`, with Clone MCP prediction settings
-stored beside the original prompt.
+The primary user commands are `/clone:loop`, `/clone:status`, and
+`/clone:cancel-loop`. Loop state lives in `.claude/clone-loop.local.md`, with
+Clone MCP prediction settings stored beside the original prompt.
 
 ## Versions
 
@@ -216,6 +220,16 @@ Recommended options:
   --clone-k 1
 ```
 
+Inspect the loop without modifying it:
+
+```bash
+/clone:status
+```
+
+This reports iteration, max iterations, completion promise, Clone threshold,
+`k`, agent, start time, session ID, and the original prompt. It only reads
+`.claude/clone-loop.local.md`.
+
 Cancel the loop:
 
 ```bash
@@ -226,16 +240,19 @@ Cancel the loop:
 
 1. `/clone:loop` writes `.claude/clone-loop.local.md`.
 2. Claude works on the task.
-3. When Claude tries to stop, `hooks/stop-hook.mjs` runs.
-4. The hook keeps Clone Loop safety checks: session isolation, corrupted-state
+3. When Claude asks a multiple-choice `AskUserQuestion`, the PreToolUse hook
+   asks Clone MCP to predict the answer. It auto-answers only when confidence
+   clears the configured threshold and the prediction maps to one option.
+4. When Claude tries to stop, `hooks/stop-hook.mjs` runs.
+5. The hook keeps Clone Loop safety checks: session isolation, corrupted-state
    cleanup, max iterations, and completion promise.
-5. If the loop continues, the hook calls Clone MCP `predict_next_prompt`
+6. If the loop continues, the hook calls Clone MCP `predict_next_prompt`
    directly with the original prompt, iteration, threshold, and
    `last_assistant_message`.
-6. If confidence clears the user-configured threshold, the hook passes the
+7. If confidence clears the user-configured threshold, the hook passes the
    prediction payload to Claude. Claude evaluates it in context and continues
    as if the user had provided the predicted prompt.
-7. If confidence is too low or MCP fails, the loop state is removed and the
+8. If confidence is too low or MCP fails, the loop state is removed and the
    human is asked to continue.
 
 ## Options
@@ -450,7 +467,8 @@ claude.exe plugin install clone@claude-plugins-official --scope user
 ```
 
 To pin a frozen version for session-only use, replace `main` with
-`clone-plugin-v0.2.5` for the current v2 release,
+`clone-plugin-v0.2.6` for the current v2 release,
+`clone-plugin-v0.2.5` for the previous v2 release,
 `clone-plugin-v0.2.4` for the public demo key fallback release,
 `clone-plugin-v0.2.3` for the Windows launcher release,
 `clone-plugin-v0.2.2` for the command cleanup release,

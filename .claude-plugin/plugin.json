@@ -1,7 +1,7 @@
 {
   "name": "clone",
-  "version": "0.2.5",
-  "description": "Clone Loop for Claude Code. Runs iterative development loops and calls Clone MCP from the stop hook to predict the next user prompt each iteration.",
+  "version": "0.2.6",
+  "description": "Clone Loop for Claude Code. Runs iterative development loops, predicts the next user prompt, and can answer AskUserQuestion during active loops.",
   "author": {
     "name": "Clone",
     "email": "hello@clone.is"

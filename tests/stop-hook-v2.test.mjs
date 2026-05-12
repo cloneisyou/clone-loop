@@ -9,6 +9,19 @@ import { fileURLToPath } from 'node:url'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'hooks', 'stop-hook.mjs')
+const ANSI_BOLD = '\u001b[1m'
+const ANSI_PURPLE = '\u001b[35m'
+const ANSI_RESET = '\u001b[0m'
+const PURPLE_BOLD_HEADING = `${ANSI_BOLD}${ANSI_PURPLE}**Clone predicted the user's next prompt**${ANSI_RESET}`
+
+function assertProminentPredictedPrompt(reason, predictedResponse) {
+  assert.match(reason, new RegExp(escapeRegExp(PURPLE_BOLD_HEADING)))
+  assert.match(reason, new RegExp(escapeRegExp(`${ANSI_PURPLE}> ${predictedResponse}${ANSI_RESET}`)))
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 function writeState(workdir, overrides = {}) {
   const state = {
@@ -196,6 +209,7 @@ describe('Clone Loop v2 stop hook', () => {
         assert.equal(output.decision, 'block')
         assert.match(output.reason, /Commit this and move on\./)
         assert.match(output.reason, /confidence 0\.91/)
+        assertProminentPredictedPrompt(output.reason, 'Commit this and move on.')
         assert.doesNotMatch(output.reason, /mcp__clone__predict_next_prompt/)
 
         const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
@@ -235,6 +249,7 @@ describe('Clone Loop v2 stop hook', () => {
         const output = JSON.parse(result.stdout)
         assert.equal(output.decision, 'block')
         assert.match(output.reason, /not confident enough/i)
+        assertProminentPredictedPrompt(output.reason, 'Maybe run more tests?')
         assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md')))
       },
     )

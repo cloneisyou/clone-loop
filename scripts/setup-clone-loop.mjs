@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const args = process.argv.slice(2)
@@ -137,6 +137,23 @@ ${prompt}
 `
 
 writeFileSync(join(claudeDir, 'clone-loop.local.md'), state)
+
+try {
+  appendFileSync(
+    join(claudeDir, 'clone-loop.history.local.jsonl'),
+    `${JSON.stringify({
+      ts: startedAt,
+      event: 'loop-start',
+      session_id: process.env.CLAUDE_CODE_SESSION_ID || '',
+      max_iterations: Number(maxIterations),
+      clone_threshold: Number(cloneThreshold),
+      clone_k: Number(cloneK),
+      clone_agent: cloneAgent,
+      completion_promise: completionPromise,
+      prompt,
+    })}\n`,
+  )
+} catch {}
 
 console.log(`Clone Loop activated.
 
