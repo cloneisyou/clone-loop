@@ -393,6 +393,37 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
     return
   }
 
+  // Satisfaction-shaped predictions trigger an early stop: Clone is
+  // saying the user would be done if they saw this output, so the
+  // loop should exit instead of force-continuing with the prediction
+  // as the next prompt. The server (`stop_recommended` on the
+  // PredictionCandidate) decides; we just act on the signal here.
+  // Gated on confidence so a low-confidence "ship it" doesn't slip
+  // through as a hallucination.
+  if (
+    prediction.stop_recommended === true &&
+    Number.isFinite(Number(predictedConfidence)) &&
+    Number(predictedConfidence) >= Number(cloneThreshold)
+  ) {
+    appendHistory({
+      event: 'stop',
+      decision: 'satisfied',
+      iteration: nextIteration,
+      confidence: Number(predictedConfidence),
+      threshold: Number(cloneThreshold),
+      prediction_id: prediction.id || null,
+      status: prediction.status || null,
+      predicted_response: predictedResponse,
+    })
+    removeState()
+    console.error(
+      `Clone Loop: Clone predicted satisfaction ("${predictedResponse}", ` +
+        `confidence ${Number(predictedConfidence).toFixed(5)}). Exiting loop.`,
+    )
+    // Intentionally no block() — let Claude's stop go through naturally.
+    return
+  }
+
   if (Number.isFinite(Number(predictedConfidence)) && Number(predictedConfidence) >= Number(cloneThreshold)) {
     const predictedPromptSection = formatPredictedPromptSection({
       iteration: nextIteration,

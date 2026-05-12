@@ -229,6 +229,79 @@ describe('Clone Loop v2 stop hook', () => {
     )
   })
 
+  it('exits the loop without blocking when Clone signals stop_recommended', async () => {
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'prediction-satisfied',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: "good. that's the page.",
+        confidence: 0.82,
+        reasoning: "User's documented bar for this output is met.",
+        stop_recommended: true,
+        candidates: [],
+        k: 1,
+        model: 'test-model',
+        latency_ms: 9,
+      },
+      async (endpoint) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(
+          result.status,
+          0,
+          JSON.stringify(
+            { error: result.error?.message, signal: result.signal, stdout: result.stdout, stderr: result.stderr },
+            null,
+            2,
+          ),
+        )
+        // Critical: stdout MUST be empty — no `decision: 'block'` JSON.
+        // That's how the hook signals "let Claude's Stop proceed".
+        assert.equal(result.stdout, '', `expected empty stdout, got: ${result.stdout}`)
+        // User-facing diagnostic on stderr.
+        assert.match(result.stderr, /Clone predicted satisfaction/)
+        // Loop state file removed so a new session doesn't resume.
+        assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md')))
+        // History records the new 'satisfied' decision kind.
+        const history = readFileSync(join(workdir, '.claude', 'clone-loop.history.local.jsonl'), 'utf8')
+        assert.match(history, /"decision":"satisfied"/)
+      },
+    )
+  })
+
+  it('ignores stop_recommended when confidence is below threshold', async () => {
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'prediction-suspicious-satisfaction',
+        status: 'escalated',
+        threshold: 0.6,
+        predicted_response: 'ship it',
+        confidence: 0.42,
+        reasoning: 'Weak match — could be hallucinated satisfaction.',
+        stop_recommended: true,  // satisfaction claim, but...
+        candidates: [],
+        k: 1,
+        model: 'test-model',
+        latency_ms: 8,
+      },
+      async (endpoint) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0)
+        // ...confidence < threshold means we DON'T trust the stop signal.
+        // Fall through to the normal low-confidence escalation path.
+        const output = JSON.parse(result.stdout)
+        assert.equal(output.decision, 'block')
+        assert.match(output.reason, /not confident enough/i)
+      },
+    )
+  })
+
   it('removes loop state and escalates when Clone confidence is low', async () => {
     writeState(workdir)
 
