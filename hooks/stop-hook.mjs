@@ -107,9 +107,10 @@ function formatIterationPromptLine({ iteration, prompt }) {
 }
 
 function formatPredictedPromptSection({ iteration, predictedResponse, predictedConfidence, cloneThreshold, prediction }) {
+  const roundedConfidence = Number(predictedConfidence).toFixed(5)
   return `${formatIterationPromptLine({ iteration, prompt: predictedResponse })}
 
-Confidence: ${predictedConfidence} / threshold: ${cloneThreshold}
+Confidence: ${roundedConfidence} / threshold: ${cloneThreshold}
 Prediction status: ${prediction.status || ''}
 Prediction id: ${prediction.id || ''}`
 }
@@ -412,12 +413,10 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
       predicted_response: predictedResponse,
     })
 
-    block(`You are continuing a Clone Loop.
-
-${predictedPromptSection}
+    block(`${predictedPromptSection}
 
 The user-configured confidence threshold was met. The prediction cleared
-confidence ${predictedConfidence}. Evaluate
+confidence ${Number(predictedConfidence).toFixed(5)}. Evaluate
 the prediction in context, then continue as if the user had provided the
 predicted prompt when it is consistent with the current task state.
 Prediction reasoning: ${prediction.reasoning || ''}
@@ -447,7 +446,7 @@ Prediction reasoning: ${prediction.reasoning || ''}
 
 Clone was not confident enough to continue automatically.
 - status: ${prediction.status || ''}
-- confidence: ${predictedConfidence}
+- confidence: ${Number(predictedConfidence).toFixed(5)}
 - threshold: ${cloneThreshold}
 
 ${predictedPromptSection}
