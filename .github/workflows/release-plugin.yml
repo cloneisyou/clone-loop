@@ -29,8 +29,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Bump patch version
-        run: node scripts/bump-plugin-version.mjs --part patch
+      - name: Bump minor version
+        run: node scripts/bump-plugin-version.mjs --part minor
 
       - name: Test release candidate
         run: npm test

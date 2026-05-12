@@ -56,7 +56,7 @@ describe('release automation', () => {
     }
   })
 
-  it('creates a patch release tag when a pull request is merged to main', () => {
+  it('creates a minor release tag when a pull request is merged to main', () => {
     const workflow = read('.github/workflows/release-plugin.yml')
 
     assert.match(workflow, /pull_request_target:/)
@@ -64,7 +64,7 @@ describe('release automation', () => {
     assert.match(workflow, /branches: \[main\]/)
     assert.match(workflow, /github\.event\.pull_request\.merged == true/)
     assert.match(workflow, /contents: write/)
-    assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
+    assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part minor/)
     assert.match(workflow, /TAG="clone-plugin-v\$\{VERSION\}"/)
     assert.match(workflow, /git push origin HEAD:main "\$TAG"/)
   })
