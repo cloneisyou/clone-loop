@@ -15,7 +15,7 @@ import {
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const CLIENT_VERSION = '0.6.0'
+const CLIENT_VERSION = '0.7.0'
 
 function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
