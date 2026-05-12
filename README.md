@@ -15,15 +15,15 @@ Then walk away.
 
 ## Why people use it
 
-- **Stop typing "yes, keep going."** Clone predicts the obvious next step and
-  injects it for you. Threshold-gated so it only auto-continues when it's
-  confident.
-- **Rich context, not a one-line snapshot.** Each prediction sees the original
-  task, every prior iteration's user turn, and a full timeline of what
-  Claude did this iteration — text, tool calls, and tool results.
+- **Stop typing "yes, keep going."** Clone predicts the obvious next step
+  and injects it for you. Threshold-gated so it only auto-continues when
+  it's confident.
+- **Rich context, not a one-line snapshot.** Each prediction sees your
+  original task, every prior iteration's user turn, and a full timeline of
+  what Claude did this iteration — text, tool calls, and tool results.
 - **AskUserQuestion popups answered automatically** during an active loop.
-- **One session, one Claude.** No subprocesses, no parallel agents to herd.
-  The loop runs inside your existing Claude Code session.
+- **One session, one Claude.** No subprocesses, no daemons, no parallel
+  agents to herd.
 
 ## Quick start
 
@@ -42,9 +42,11 @@ Inside Claude Code:
 Cancel anytime with `/clone:cancel-loop`.
 
 > [!NOTE]
-> Clone ships with a public demo API key so you can try the loop in seconds.
+> Clone ships with a public **demo API key** so you can try it in seconds.
 > For private memory and your own prediction quality, set `CLONE_API_TOKEN`
 > and run `/clone:api-key import-env`.
+
+To update later: `claude plugin marketplace update clone-labs && claude plugin update clone@clone-labs`.
 
 ## Commands
 
@@ -55,30 +57,25 @@ Cancel anytime with `/clone:cancel-loop`.
 | `/clone:api-key status\|import-env\|set\|clear` | Manage your Clone API key. |
 | `/clone:help` | Show command help. |
 
-### Options
+### Options for `/clone:loop`
 
-- `--max-iterations <n>` — stop after N iterations (`0` = unlimited). Start
-  small (5–10) while you tune the prompt.
+- `--max-iterations <n>` — stop after N iterations (`0` = unlimited).
+  Start small (5–10) while you tune the prompt.
 - `--clone-threshold <n>` — confidence threshold in `[0, 1]`. Default `0.8`.
   Below threshold, Clone hands control back to you.
 - `--clone-agent "<label>"` — advanced; agent label sent to Clone.
 
 ## How it works
 
-1. `/clone:loop` writes a state file and you ask Claude to start the task.
-2. Claude works. When it tries to stop, the Stop hook intercepts.
+1. `/clone:loop` writes a state file and Claude starts the task.
+2. When Claude tries to stop, the Stop hook intercepts.
 3. The hook asks Clone MCP `predict_next_prompt` for what you'd most likely
    say next.
-4. **Above the threshold** → Clone's prediction is injected and Claude
-   continues.  **Below** → the loop ends and asks for human input.
+4. **Above threshold** → prediction is injected and Claude continues.
+   **Below** → loop ends and asks for human input.
 5. Mid-loop `AskUserQuestion` popups are auto-answered the same way.
 
-That's it. No subprocesses, no daemons, no parallel agents.
-
-## What Clone actually sees
-
-Each prediction is built from three sections so Clone has the context to
-predict like you:
+### What Clone actually sees
 
 - **Your original task prompt** — always preserved verbatim.
 - **The conversation so far** — every prior iteration's injected user turn
@@ -87,107 +84,102 @@ predict like you:
 - **What Claude just did** — this iteration's full timeline.
 
 Sane caps: 20-turn rolling window on user history, oldest prior-iter
-timelines drop first when the combined size would exceed the budget, and
-long tool outputs are summarized head + tail. The original prompt and the
-freshest iteration are never trimmed.
+timelines drop first when the combined size exceeds budget, and long tool
+outputs are summarized head + tail. The original prompt and the freshest
+iteration are never trimmed.
+
+## Why Clone Loop, not just Ralph Loop?
+
+[Ralph Loop](https://ghuntley.com/ralph/) is the well-known baseline:
+when Claude tries to stop, **replay the same prompt**. It works — until
+the right next nudge stops being "do what I just said." Tell Claude to
+*"Build a REST API"* and the second iteration shouldn't re-read your
+spec; it should write tests. The third shouldn't write tests again; it
+should fix the failures it just produced.
+
+Clone Loop replaces the replay with a **prediction**: it asks Clone MCP
+*"what would the user say next, given the conversation so far?"* — and
+only injects that prediction when the model is confident enough. Below
+threshold, control returns to you instead of looping on a stale
+instruction.
+
+```mermaid
+flowchart LR
+  STOP([Claude tries to stop])
+  STOP --> RALPH["Ralph Loop:<br/>replay original prompt"]
+  STOP --> CLONE["Clone Loop:<br/>ask Clone MCP for next prompt"]
+  RALPH --> RC["Claude continues<br/>with the same instruction"]
+  CLONE --> GATE{"Confidence ≥<br/>threshold?"}
+  GATE -- yes --> CC["Inject prediction →<br/>Claude continues with<br/>a fresh, contextual nudge"]
+  GATE -- no --> ESC["Escalate to human"]
+
+  classDef ralph fill:#fff7ed,stroke:#ea580c,color:#111827;
+  classDef clone fill:#ecfdf5,stroke:#059669,color:#064e3b;
+  classDef gate fill:#eff6ff,stroke:#2563eb,color:#1e3a8a;
+  classDef esc fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+  class RALPH,RC ralph
+  class CLONE,CC clone
+  class GATE gate
+  class ESC esc
+```
+
+| | Ralph Loop | Clone Loop |
+| --- | --- | --- |
+| Next prompt | Same as the first one | Predicted from the conversation so far |
+| Context sent | None | Original task + every prior user turn + current iteration timeline |
+| Safety gate | Max iterations only | Max iterations **+ confidence threshold** |
+| Failure mode | Pushes stale instructions until N hits | Stops and asks the human when confidence dips |
+| Best fit | Strict retry loops | Iterative work where the next step changes |
 
 ## API key
 
-Token resolution: `CLONE_API_TOKEN` env var → plugin config
+Token resolution order: `CLONE_API_TOKEN` env var → plugin config
 (`${CLAUDE_PLUGIN_DATA}/auth.local.json`) → public demo fallback.
-
-Recommended setup:
 
 ```bash
 export CLONE_API_TOKEN="clone_xxx"   # or $env:CLONE_API_TOKEN on PowerShell
 claude
 ```
 
-Then:
-
 ```text
 /clone:api-key import-env
 /clone:api-key status
 ```
 
-Prefer `import-env` over `/clone:api-key set <key>` — slash-command
-arguments can stick around in transcripts.
+Prefer `import-env` — `/clone:api-key set <key>` works but the key may
+linger in your transcript.
 
 > [!WARNING]
 > The demo key is public and shared. Don't use it with private memory.
 
-## Requirements
-
-- Claude Code with plugin support.
-- Node.js on `PATH`.
-- Windows: PowerShell or cmd, no Git Bash needed.
-
-## Plugin structure
-
-```text
-.claude-plugin/plugin.json       Plugin metadata.
-commands/                        Slash command definitions.
-hooks/stop-hook.mjs              Intercepts stop, calls Clone MCP.
-hooks/ask-user-question-hook.mjs Auto-answers popups during a loop.
-scripts/conversation-context.mjs Builds the multi-turn agent_input.
-scripts/clone-auth.mjs           Token resolution.
-scripts/manage-api-key.mjs       /clone:api-key implementation.
-scripts/setup-clone-loop.mjs     /clone:loop state writer.
-```
-
-`.mcp.json` registers the remote Clone MCP endpoint with
-`X-Clone-API-Key` interpolation:
-
-```json
-{
-  "mcpServers": {
-    "clone": {
-      "url": "https://api.clone.is/mcp",
-      "headers": {
-        "X-Clone-API-Key": "${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}"
-      }
-    }
-  }
-}
-```
-
-## Development
-
-```bash
-pnpm test                      # unit + integration tests
-pnpm run test:mcp:e2e          # live Clone MCP smoke (uses demo token if unset)
-node scripts/manual-e2e-multiturn.mjs   # manual rich-context probe
-claude plugin validate .
-```
-
-> [!IMPORTANT]
-> Live MCP tests hit the remote Clone endpoint. Don't record sensitive data
-> against the demo fallback.
-
-## Installing & updating
-
-```bash
-# install
-claude plugin marketplace add cloneisyou/clone-claude-plugin@main
-claude plugin install clone@clone-labs --scope user
-
-# update
-claude plugin marketplace update clone-labs
-claude plugin update clone@clone-labs
-```
-
-PowerShell users: same commands with `claude.exe`.
-
-For a pinned, session-only checkout:
+## Pinning a version
 
 ```bash
 git clone https://github.com/cloneisyou/clone-claude-plugin.git
 cd clone-claude-plugin
+git checkout clone-plugin-v0.3.0   # or any tag from the Releases page
 claude --plugin-dir .
 ```
 
-Pin a frozen version by replacing `main` with `clone-plugin-v0.3.0` (current)
-or `clone-plugin-v0.2.7` (previous).
+Tags: see [Releases](https://github.com/cloneisyou/clone-claude-plugin/releases).
+
+## Requirements
+
+Claude Code with plugin support, Node.js on `PATH`. Windows: PowerShell
+or cmd, no Git Bash needed.
+
+## Development
+
+```bash
+pnpm test                                # unit + integration
+pnpm run test:mcp:e2e                    # live Clone MCP smoke
+node scripts/manual-e2e-multiturn.mjs    # manual rich-context probe
+claude plugin validate .
+```
+
+> [!IMPORTANT]
+> Live MCP tests hit the remote Clone endpoint. Don't record sensitive
+> data against the demo fallback.
 
 > [!NOTE]
 > The `clone-labs` marketplace is hosted from this repo — not the official

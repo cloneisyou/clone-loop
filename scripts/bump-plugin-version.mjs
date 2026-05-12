@@ -89,19 +89,6 @@ function updateClientVersion(path, nextVersion) {
   )
 }
 
-function updateReadmePins(path, previousVersion, nextVersion) {
-  const contents = readFileSync(path, 'utf8')
-  writeFileSync(
-    path,
-    replaceOnce(
-      contents,
-      /`clone-plugin-v\d+\.\d+\.\d+` for the current release or `clone-plugin-v\d+\.\d+\.\d+` for the\s+previous release\./,
-      `\`clone-plugin-v${nextVersion}\` for the current release or \`clone-plugin-v${previousVersion}\` for the\nprevious release.`,
-      `${path} current/previous release pins`,
-    ),
-  )
-}
-
 const options = parseArgs(process.argv.slice(2))
 const manifestPath = join(options.root, '.claude-plugin', 'plugin.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
@@ -115,6 +102,5 @@ if (nextVersion === previousVersion) {
 updateJsonVersion(manifestPath, nextVersion)
 updateClientVersion(join(options.root, 'hooks', 'stop-hook.mjs'), nextVersion)
 updateClientVersion(join(options.root, 'hooks', 'ask-user-question-hook.mjs'), nextVersion)
-updateReadmePins(join(options.root, 'README.md'), previousVersion, nextVersion)
 
 console.log(`clone plugin version: ${previousVersion} -> ${nextVersion}`)

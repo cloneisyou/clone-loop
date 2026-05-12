@@ -15,7 +15,7 @@ function writeFixture(rootDir, path, contents) {
 }
 
 describe('release automation', () => {
-  it('bumps plugin version across manifest, hook clients, and README pins', () => {
+  it('bumps plugin version across manifest and hook clients', () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'clone-release-fixture-'))
 
     try {
@@ -26,13 +26,6 @@ describe('release automation', () => {
       )
       writeFixture(fixtureRoot, 'hooks/stop-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
       writeFixture(fixtureRoot, 'hooks/ask-user-question-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
-      writeFixture(
-        fixtureRoot,
-        'README.md',
-        'To pin a frozen version for session-only use, replace `main` with\n' +
-          '`clone-plugin-v0.2.7` for the current release or `clone-plugin-v0.2.6` for the\n' +
-          'previous release.\n',
-      )
 
       const result = spawnSync(
         process.execPath,
@@ -44,12 +37,9 @@ describe('release automation', () => {
       assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.claude-plugin/plugin.json'), 'utf8')).version, '0.3.0')
       assert.match(readFileSync(join(fixtureRoot, 'hooks/stop-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.3\.0'/)
       assert.match(readFileSync(join(fixtureRoot, 'hooks/ask-user-question-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.3\.0'/)
-      assert.match(readFileSync(join(fixtureRoot, 'README.md'), 'utf8'), /`clone-plugin-v0\.3\.0` for the current release/)
-      assert.match(readFileSync(join(fixtureRoot, 'README.md'), 'utf8'), /`clone-plugin-v0\.2\.7` for the\s+previous release/)
       assert.match(result.stdout, /0\.2\.7 -> 0\.3\.0/)
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true })
     }
   })
-
 })
