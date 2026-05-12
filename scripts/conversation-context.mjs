@@ -569,5 +569,18 @@ Clone threshold: ${safeThreshold}
 ${historyBlock}
 
 ### assistant (current iter ${safeIteration}):
-${currentAssistantBlock}`
+${currentAssistantBlock}
+
+---
+Given the conversation and the assistant's work above, predict the most
+likely next prompt the user would send to continue this task.
+
+Rules:
+- Write as if you are the user typing their next message.
+- Be specific: reference concrete artifacts, file names, test results, or
+  next steps that follow naturally from what the assistant just did.
+- Minimum 1 full sentence. No single words, no "ok", no "looks good",
+  no bare affirmations.
+- If the current work is complete, the prompt should ask for the next
+  logical feature, verification step, or follow-up action.`
 }

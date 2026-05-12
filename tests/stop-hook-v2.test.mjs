@@ -210,6 +210,9 @@ describe('Clone Loop v2 stop hook', () => {
         assert.equal(calls[1].params.arguments.agent, 'Claude Code Clone Loop')
         assert.match(calls[1].params.arguments.agent_input, /Fix the bug and run tests/)
         assert.match(calls[1].params.arguments.agent_input, /Tests passed\. What next\?/)
+        assert.match(calls[1].params.arguments.agent_input, /predict the most/)
+        assert.match(calls[1].params.arguments.agent_input, /No single words, no "ok"/)
+
         assert.equal(calls[1].params.arguments.threshold, 0.6)
         assert.equal(calls[1].params.arguments.session_id, 'session-123')
 
