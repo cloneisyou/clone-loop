@@ -1,12 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 export const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
 export const AUTH_FILE_NAME = 'auth.local.json'
 
+export function defaultPluginDataDir() {
+  return join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-labs')
+}
+
 export function pluginDataDir(env = process.env) {
   const value = String(env.CLAUDE_PLUGIN_DATA || '').trim()
-  return value || ''
+  return value || defaultPluginDataDir()
+}
+
+export function isPluginDataDirInjected(env = process.env) {
+  return Boolean(String(env.CLAUDE_PLUGIN_DATA || '').trim())
 }
 
 export function authFilePath(env = process.env) {
@@ -39,10 +48,6 @@ export function writePluginConfigToken(token, env = process.env) {
   if (!value) throw new Error('Clone API key must not be empty.')
 
   const dir = pluginDataDir(env)
-  if (!dir) {
-    throw new Error('CLAUDE_PLUGIN_DATA is not set, so the plugin config token cannot be stored.')
-  }
-
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     authFilePath(env),

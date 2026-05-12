@@ -3,6 +3,7 @@
 import {
   authFilePath,
   clearPluginConfigToken,
+  isPluginDataDirInjected,
   maskToken,
   pluginDataDir,
   resolveCloneToken,
@@ -38,11 +39,11 @@ function printResolvedToken(prefix = '') {
   console.log(`Source: ${resolved.source}`)
   console.log(`Token: ${resolved.masked}`)
 
-  const dataDir = pluginDataDir()
-  if (dataDir) {
+  const injected = isPluginDataDirInjected()
+  if (injected) {
     console.log(`Plugin config: ${authFilePath()}`)
   } else {
-    console.log('Plugin config: unavailable because CLAUDE_PLUGIN_DATA is not set')
+    console.log(`Plugin config: ${authFilePath()} (fallback path — CLAUDE_PLUGIN_DATA not injected)`)
   }
 
   if (resolved.isDemo) {

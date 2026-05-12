@@ -66,11 +66,9 @@ function runHook(workdir, endpoint, options = {}) {
         delete env.CLONE_API_TOKEN
       }
     }
-    if (options.pluginDataDir) {
-      env.CLAUDE_PLUGIN_DATA = options.pluginDataDir
-    } else {
-      delete env.CLAUDE_PLUGIN_DATA
-    }
+    // Always set CLAUDE_PLUGIN_DATA to an isolated dir so the fallback path
+    // doesn't accidentally read tokens stored in the developer's real config.
+    env.CLAUDE_PLUGIN_DATA = options.pluginDataDir || join(workdir, '.clone-plugin-data')
 
     const child = spawn(process.execPath, [hookPath], {
       cwd: workdir,
