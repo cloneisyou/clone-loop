@@ -49,8 +49,37 @@ describe('Clone Loop setup script', () => {
       const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
       assert.match(state, /launcher smoke test/)
       assert.match(state, /max_iterations: 1/)
+      assert.match(state, /clone_threshold: 0\.8/)
+      assert.doesNotMatch(state, /completion_promise/)
+      assert.doesNotMatch(state, /clone_k/)
     } finally {
       rmSync(workdir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects removed public loop options', () => {
+    for (const option of ['--completion-promise', '--clone-k']) {
+      const workdir = mkdtempSync(join(tmpdir(), 'clone-loop-setup-'))
+
+      try {
+        const result = spawnSync(
+          process.execPath,
+          [setupPath, 'launcher smoke test', option, '1'],
+          {
+            cwd: workdir,
+            env: {
+              ...process.env,
+              CLAUDE_PLUGIN_ROOT: pluginRoot,
+            },
+            encoding: 'utf8',
+          },
+        )
+
+        assert.notEqual(result.status, 0, `${option} should fail`)
+        assert.match(result.stderr, /Unknown option/)
+      } finally {
+        rmSync(workdir, { recursive: true, force: true })
+      }
     }
   })
 })

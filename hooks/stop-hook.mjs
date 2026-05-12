@@ -2,11 +2,11 @@
 
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
-const CLIENT_VERSION = '0.2.6'
+const CLIENT_VERSION = '0.2.7'
 const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
@@ -131,10 +131,6 @@ function parseSse(text) {
   return JSON.parse(text)
 }
 
-function cloneApiToken() {
-  return process.env.CLONE_API_TOKEN?.trim() || DEMO_TOKEN
-}
-
 async function rpc(endpoint, token, method, params = {}, sessionId = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -159,9 +155,9 @@ async function rpc(endpoint, token, method, params = {}, sessionId = '') {
   }
 }
 
-async function clonePredictNextPrompt({ agent, agentInput, k, threshold, sessionId }) {
+async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId }) {
   const endpoint = process.env.CLONE_MCP_URL || 'https://api.clone.is/mcp'
-  const token = cloneApiToken()
+  const { token } = resolveCloneToken()
 
   const init = await rpc(endpoint, token, 'initialize', {
     protocolVersion: '2024-11-05',
@@ -172,7 +168,7 @@ async function clonePredictNextPrompt({ agent, agentInput, k, threshold, session
   const args = {
     agent,
     agent_input: agentInput,
-    k: Number(k || '1'),
+    k: 1,
     threshold: Number(threshold || '0.8'),
   }
   if (sessionId) args.session_id = sessionId
@@ -207,11 +203,6 @@ function lastAssistantText(transcriptPath) {
   return texts.at(-1) || ''
 }
 
-function normalizedPromiseText(output) {
-  const match = output.match(/<promise>([\s\S]*?)<\/promise>/)
-  return match ? match[1].trim().replace(/\s+/g, ' ') : ''
-}
-
 async function main() {
   const hookInput = parseJson(await readStdin())
   if (!existsSync(LOOP_STATE_FILE)) return
@@ -226,15 +217,12 @@ async function main() {
   const {
     iteration,
     max_iterations: maxIterations,
-    completion_promise: completionPromise,
     session_id: stateSession,
     clone_threshold: cloneThresholdRaw,
-    clone_k: cloneKRaw,
     clone_agent: cloneAgentRaw,
   } = state.frontmatter
 
   const cloneThreshold = cloneThresholdRaw || '0.8'
-  const cloneK = cloneKRaw || '1'
   const cloneAgent = cloneAgentRaw || 'Claude Code Clone Loop'
   const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
 
@@ -248,12 +236,6 @@ async function main() {
 
   if (!isIntegerString(maxIterations)) {
     console.error('Clone Loop: state file corrupted; max_iterations is not numeric.')
-    removeState()
-    return
-  }
-
-  if (!isIntegerString(cloneK) || Number(cloneK) < 1 || Number(cloneK) > 10) {
-    console.error('Clone Loop: state file corrupted; clone_k must be 1-10.')
     removeState()
     return
   }
@@ -295,18 +277,6 @@ async function main() {
     }
   }
 
-  if (completionPromise && normalizedPromiseText(lastOutput) === completionPromise) {
-    console.log(`Clone Loop: Detected <promise>${completionPromise}</promise>`)
-    appendHistory({
-      event: 'stop',
-      decision: 'complete-promise',
-      iteration: Number(iteration),
-      completion_promise: completionPromise,
-    })
-    removeState()
-    return
-  }
-
   const promptText = state.prompt.trim()
   if (!promptText) {
     console.error('Clone Loop: State file has no prompt text; stopping.')
@@ -317,9 +287,7 @@ async function main() {
   const nextIteration = Number(iteration) + 1
   writeFileSync(LOOP_STATE_FILE, state.content.replace(/^iteration: .*/m, `iteration: ${nextIteration}`))
 
-  const systemMessage = completionPromise
-    ? `Clone Loop iteration ${nextIteration} | To stop: output <promise>${completionPromise}</promise> only when true.`
-    : `Clone Loop iteration ${nextIteration} | No completion promise set.`
+  const systemMessage = `Clone Loop iteration ${nextIteration}.`
 
   const agentInput = `Original Clone Loop prompt:
 ${promptText}
@@ -335,7 +303,6 @@ ${lastOutput}`
     prediction = await clonePredictNextPrompt({
       agent: cloneAgent,
       agentInput,
-      k: cloneK,
       threshold: cloneThreshold,
       sessionId: hookSession,
     })
@@ -372,9 +339,6 @@ The loop state file has been removed. Tell the user Clone could not produce a sa
   }
 
   if (Number.isFinite(Number(predictedConfidence)) && Number(predictedConfidence) >= Number(cloneThreshold)) {
-    const promiseRule = completionPromise
-      ? `Keep the Clone Loop completion promise rule: only output <promise>${completionPromise}</promise> when it is genuinely true.`
-      : 'No completion promise is set for this Clone Loop.'
     const predictedPromptSection = formatPredictedPromptSection({
       iteration: nextIteration,
       predictedResponse,
@@ -403,8 +367,7 @@ confidence ${predictedConfidence}. Evaluate
 the prediction in context, then continue as if the user had provided the
 predicted prompt when it is consistent with the current task state.
 Prediction reasoning: ${prediction.reasoning || ''}
-
-${promiseRule}`, `${systemMessage}
+`, `${systemMessage}
 
 ${predictedPromptSection}`)
     return

@@ -2,11 +2,11 @@
 
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
-const CLIENT_VERSION = '0.2.6'
+const CLIENT_VERSION = '0.2.7'
 
 function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -84,10 +84,6 @@ function parseSse(text) {
   return JSON.parse(text)
 }
 
-function cloneApiToken() {
-  return process.env.CLONE_API_TOKEN?.trim() || DEMO_TOKEN
-}
-
 async function rpc(endpoint, token, method, params = {}, sessionId = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -112,9 +108,9 @@ async function rpc(endpoint, token, method, params = {}, sessionId = '') {
   }
 }
 
-async function clonePredictNextPrompt({ agent, agentInput, k, threshold, sessionId }) {
+async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId }) {
   const endpoint = process.env.CLONE_MCP_URL || 'https://api.clone.is/mcp'
-  const token = cloneApiToken()
+  const { token } = resolveCloneToken()
 
   const init = await rpc(endpoint, token, 'initialize', {
     protocolVersion: '2024-11-05',
@@ -125,7 +121,7 @@ async function clonePredictNextPrompt({ agent, agentInput, k, threshold, session
   const args = {
     agent,
     agent_input: agentInput,
-    k: Number(k || '1'),
+    k: 1,
     threshold: Number(threshold || '0.8'),
   }
   if (sessionId) args.session_id = sessionId
@@ -341,7 +337,6 @@ async function main() {
   const {
     session_id: stateSession,
     clone_threshold: cloneThresholdRaw,
-    clone_k: cloneKRaw,
     clone_agent: cloneAgentRaw,
   } = state.frontmatter
 
@@ -353,7 +348,6 @@ async function main() {
   if (!questions.length) return
 
   const cloneThreshold = cloneThresholdRaw || '0.8'
-  const cloneK = cloneKRaw || '1'
   const cloneAgent = cloneAgentRaw || 'Claude Code Clone Loop'
   const answers = {}
   const confidenceValues = []
@@ -382,7 +376,6 @@ async function main() {
           questionCount: questions.length,
           threshold: cloneThreshold,
         }),
-        k: 1,
         threshold: cloneThreshold,
         sessionId: hookSession,
       })

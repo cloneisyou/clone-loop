@@ -21,15 +21,17 @@ describe('Clone Claude plugin contract', () => {
     const pluginFiles = [
       '.claude-plugin/plugin.json',
       '.mcp.json',
+      'commands/api-key.md',
       'commands/cancel-loop.md',
       'commands/help.md',
       'commands/loop.md',
-      'commands/status.md',
       'hooks/ask-user-question-hook.mjs',
       'hooks/hooks.json',
       'hooks/stop-hook.mjs',
       'LICENSE',
       'README.md',
+      'scripts/clone-auth.mjs',
+      'scripts/manage-api-key.mjs',
       'scripts/setup-clone-loop.mjs',
     ]
 
@@ -38,6 +40,7 @@ describe('Clone Claude plugin contract', () => {
     }
 
     for (const file of [
+      'commands/status.md',
       'hooks/stop-hook.sh',
       'scripts/run-plugin-bash.mjs',
       'scripts/setup-clone-loop.sh',
@@ -51,7 +54,7 @@ describe('Clone Claude plugin contract', () => {
       .filter((file) => file.endsWith('.md'))
       .sort()
 
-    assert.deepEqual(commandFiles, ['cancel-loop.md', 'help.md', 'loop.md', 'status.md'])
+    assert.deepEqual(commandFiles, ['api-key.md', 'cancel-loop.md', 'help.md', 'loop.md'])
   })
 
   it('registers the remote Clone MCP server for Claude Code', () => {
@@ -64,22 +67,17 @@ describe('Clone Claude plugin contract', () => {
     )
   })
 
-  it('documents /clone:loop as the primary command', () => {
+  it('documents /clone:loop, /clone:api-key, and /clone:cancel-loop as the public commands', () => {
     const readme = read('README.md')
     const loopCommand = read('commands/loop.md')
+    const apiKeyCommand = read('commands/api-key.md')
 
     assert.match(readme, /\/clone:loop/)
+    assert.match(readme, /\/clone:api-key/)
+    assert.match(readme, /\/clone:cancel-loop/)
+    assert.doesNotMatch(readme, /\/clone:status/)
     assert.match(loopCommand, /# Clone Loop Command/)
-  })
-
-  it('exposes /clone:status as a read-only inspector for the loop state', () => {
-    const statusCommand = read('commands/status.md')
-
-    assert.match(statusCommand, /# Clone Loop Status/)
-    assert.match(statusCommand, /\.claude\/clone-loop\.local\.md/)
-    assert.match(statusCommand, /Read\(\.claude\/clone-loop\.local\.md\)/)
-    assert.doesNotMatch(statusCommand, /\brm\b/)
-    assert.doesNotMatch(statusCommand, /writeFileSync/)
+    assert.match(apiKeyCommand, /# Clone API Key Command/)
   })
 
   it('runs Clone Loop setup directly through Node instead of Bash scripts', () => {
@@ -91,8 +89,24 @@ describe('Clone Claude plugin contract', () => {
       /node "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/setup-clone-loop\.mjs" \$ARGUMENTS/,
     )
     assert.match(loopCommand, /Use the Bash tool/)
+    assert.doesNotMatch(loopCommand, /completion-promise/)
+    assert.doesNotMatch(loopCommand, /clone-k/)
     assert.doesNotMatch(loopCommand, /```!/)
     assert.doesNotMatch(loopCommand, /run-plugin-bash/)
+  })
+
+  it('runs Clone API key management through Node', () => {
+    const apiKeyCommand = read('commands/api-key.md')
+
+    assert.match(apiKeyCommand, /allowed-tools: Bash\(node \*manage-api-key\.mjs\*\)/)
+    assert.match(
+      apiKeyCommand,
+      /node "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/manage-api-key\.mjs" \$ARGUMENTS/,
+    )
+    assert.match(apiKeyCommand, /status/)
+    assert.match(apiKeyCommand, /import-env/)
+    assert.match(apiKeyCommand, /set <key>/)
+    assert.match(apiKeyCommand, /clear/)
   })
 
   it('exposes a token-gated Clone MCP end-to-end test script', () => {
@@ -123,35 +137,48 @@ describe('Clone Claude plugin contract', () => {
     )
   })
 
-  it('persists Clone prediction settings when starting a Clone Loop', () => {
+  it('persists the supported Clone Loop settings only', () => {
     const setup = read('scripts/setup-clone-loop.mjs')
 
     assert.match(setup, /let cloneThreshold = '0\.8'/)
-    assert.match(setup, /let cloneK = '1'/)
     assert.match(setup, /let cloneAgent = 'Claude Code Clone Loop'/)
     assert.match(setup, /--clone-threshold/)
     assert.match(setup, /clone_threshold: \$\{cloneThreshold\}/)
-    assert.match(setup, /clone_k: \$\{cloneK\}/)
     assert.match(setup, /clone_agent: \$\{quoteYaml\(cloneAgent\)\}/)
+    assert.doesNotMatch(setup, /completionPromise/)
+    assert.doesNotMatch(setup, /completion_promise/)
+    assert.doesNotMatch(setup, /cloneK/)
+    assert.doesNotMatch(setup, /clone_k/)
+    assert.doesNotMatch(setup, /--completion-promise/)
+    assert.doesNotMatch(setup, /--clone-k/)
   })
 
-  it('calls Clone MCP from the hook and passes confident predictions to Claude', () => {
-    const hook = read('hooks/stop-hook.mjs')
+  it('calls Clone MCP from hooks through the shared token resolver', () => {
+    const stopHook = read('hooks/stop-hook.mjs')
+    const askHook = read('hooks/ask-user-question-hook.mjs')
 
-    assert.match(hook, /clonePredictNextPrompt/)
-    assert.match(hook, /tools\/call/)
-    assert.match(hook, /predict_next_prompt/)
-    assert.match(hook, /last_assistant_message/)
-    assert.match(hook, /predicted_response/)
-    assert.match(hook, /confidence/)
-    assert.match(hook, /Number\(predictedConfidence\) >= Number\(cloneThreshold\)/)
-    assert.match(hook, /user-configured confidence threshold/)
-    assert.match(hook, /human escalation/)
-    assert.doesNotMatch(hook, /mcp__clone__submit_feedback/)
-    assert.doesNotMatch(hook, /Git Bash/)
+    for (const hook of [stopHook, askHook]) {
+      assert.match(hook, /resolveCloneToken/)
+      assert.match(hook, /clonePredictNextPrompt/)
+      assert.match(hook, /tools\/call/)
+      assert.match(hook, /predict_next_prompt/)
+      assert.match(hook, /predicted_response/)
+      assert.match(hook, /confidence/)
+      assert.doesNotMatch(hook, /process\.env\.CLONE_API_TOKEN \|\| DEMO_TOKEN/)
+    }
+
+    assert.match(stopHook, /last_assistant_message/)
+    assert.match(stopHook, /Number\(predictedConfidence\) >= Number\(cloneThreshold\)/)
+    assert.match(stopHook, /user-configured confidence threshold/)
+    assert.match(stopHook, /human escalation/)
+    assert.doesNotMatch(stopHook, /mcp__clone__submit_feedback/)
+    assert.doesNotMatch(stopHook, /normalizedPromiseText/)
+    assert.doesNotMatch(stopHook, /completion_promise/)
+    assert.doesNotMatch(stopHook, /clone_k/)
+    assert.doesNotMatch(stopHook, /Git Bash/)
   })
 
-  it('formats confident predicted prompts as a prominent block', () => {
+  it('formats predicted prompts as a prominent purple iteration line', () => {
     const hook = read('hooks/stop-hook.mjs')
 
     assert.match(hook, /ANSI_PURPLE = '\\u001b\[35m'/)

@@ -8,27 +8,26 @@ Please explain the following to the user:
 
 ## What is Clone Loop?
 
-Clone Loop is a Clone-backed automation loop for Claude Code. It runs inside the current session and uses Clone MCP to predict the user's likely next prompt whenever Claude tries to stop.
+Clone Loop is a Clone-backed automation loop for Claude Code. It runs inside
+the current session and uses Clone MCP to predict the user's likely next prompt
+whenever Claude tries to stop.
 
 **Core concept:**
-
-The loop runs inside the current Claude Code session:
 
 1. Claude receives the user's initial task.
 2. Claude works on the task, modifying files.
 3. Claude tries to stop.
 4. The Stop hook intercepts the stop.
 5. The Stop hook calls Clone MCP `predict_next_prompt` directly.
-6. If confidence clears the configured threshold, the hook passes the prediction payload to Claude.
-7. Claude evaluates the prediction in context and continues as if the user had provided the predicted prompt.
-8. The loop continues until the completion promise is detected or the max iteration limit is reached.
+6. If confidence clears the configured threshold, the hook passes the
+   prediction payload to Claude.
+7. Claude evaluates the prediction in context and continues as if the user had
+   provided the predicted prompt.
+8. The loop continues until max iterations are reached, confidence fails, MCP
+   fails, or the user runs `/clone:cancel-loop`.
 
-During an active loop, Clone also watches `AskUserQuestion`. If Clone predicts
-an answer with enough confidence and the answer maps to exactly one option, the
-question is answered automatically. Otherwise Claude Code shows the normal
-human question.
-
-The self-reference comes from Claude seeing previous file changes and git history. Clone adds personalized next-prompt prediction between iterations.
+During an active loop, Clone also watches `AskUserQuestion` and answers with a
+predicted response so the user does not have to handle the popup manually.
 
 ## Available Commands
 
@@ -40,28 +39,30 @@ Start a Clone Loop in your current session.
 
 ```bash
 /clone:loop "Refactor the cache layer" --max-iterations 20
-/clone:loop "Add tests" --completion-promise "TESTS COMPLETE"
+/clone:loop "Add tests" --clone-threshold 0.8
 ```
 
 **Options:**
 
-- `--max-iterations <n>` - Max iterations before auto-stop.
-- `--completion-promise <text>` - Promise phrase to signal completion.
+- `--max-iterations <n>` - Max iterations before auto-stop. `0` means unlimited.
 - `--clone-threshold <n>` - Confidence threshold for auto-continuation.
-- `--clone-k <n>` - Number of candidate prompts to request.
-- `--clone-agent <text>` - Agent label sent to Clone.
+- `--clone-agent <text>` - Advanced agent label sent to Clone.
 
-### /clone:status
+### /clone:api-key
 
-Show the active Clone Loop status without modifying it.
+Manage the Clone API key used by Clone Loop.
 
 **Usage:**
 
 ```bash
-/clone:status
+/clone:api-key status
+/clone:api-key import-env
+/clone:api-key clear
 ```
 
-Reports iteration, max iterations, completion promise, Clone threshold, k, agent, start time, session ID, and the original loop prompt. If no loop is active, reports that instead.
+Token priority is nonblank `CLONE_API_TOKEN`, then plugin config, then demo fallback.
+Prefer `import-env` over `set <key>` because direct slash-command arguments can
+remain in the transcript.
 
 ### /clone:cancel-loop
 
@@ -75,15 +76,21 @@ Cancel an active Clone Loop.
 
 ## Key Concepts
 
-### Completion Promises
+### Token Sources
 
-To signal completion, Claude must output a `<promise>...</promise>` tag whose text exactly matches the configured completion promise.
+Clone Loop resolves API keys in this order:
 
-Without a completion promise or `--max-iterations`, Clone Loop can run indefinitely.
+1. Nonblank `CLONE_API_TOKEN` from the Claude Code process environment.
+2. Saved plugin config in `${CLAUDE_PLUGIN_DATA}/auth.local.json`.
+3. The public demo fallback token.
+
+Full tokens are never shown in command output.
 
 ### Human Escalation
 
-If Clone MCP returns low confidence or fails, the hook removes `.claude/clone-loop.local.md`. Claude should explain that Clone was not confident enough and wait for human input.
+If Clone MCP returns low confidence or fails, the hook removes
+`.claude/clone-loop.local.md`. Claude should explain that Clone was not
+confident enough and wait for human input.
 
 ## Learn More
 

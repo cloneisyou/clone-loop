@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/plugin-contract.test.mjs tests/setup-clone-loop.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs",
+    "test": "node --test tests/plugin-contract.test.mjs tests/api-key-manager.test.mjs tests/setup-clone-loop.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs",
     "test:mcp": "node --test tests/remote-mcp-connect.test.mjs",
     "test:mcp:e2e": "node --test tests/remote-mcp-e2e.test.mjs"
   }
