@@ -1,4 +1,6 @@
 <p align="center">
+  <img src="assets/clone-logo-spin-transparent.gif" alt="Clone logo spinning" width="180">
+  <br/>
   <br/>
   <strong>C L O N E</strong>
   <br/><br/>
@@ -14,10 +16,6 @@
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Clone%20MCP-next--prompt-0ea5e9" alt="Clone MCP">
   <img src="https://img.shields.io/github/license/cloneisyou/clone-loop?color=green" alt="License">
-</p>
-
-<p align="center">
-  <img src="assets/clone-logo-spin-white.gif" alt="Clone logo spinning" width="180">
 </p>
 
 <p align="center">
