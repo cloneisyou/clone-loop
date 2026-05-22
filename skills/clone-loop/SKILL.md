@@ -5,7 +5,7 @@ description: Start a Clone Loop in Codex so Stop hooks can continue with Clone-p
 
 # Clone Loop
 
-Use this skill when the user asks to start Clone Loop, run `/clone:loop ...`, or keep Codex working with Clone-predicted next prompts.
+Use this skill when the user asks to start Clone Loop, run the Claude `/clone:loop ...` equivalent in Codex, or keep Codex working with Clone-predicted next prompts.
 
 Run the setup script with the user's task and options:
 

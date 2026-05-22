@@ -3,6 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { loopHistoryPath, loopStatePath } from './clone-paths.mjs'
 import { appendLoopHistory, parseState, removeLoopState } from './loop-state-guard.mjs'
+import { stopCloneSession } from './clone-mcp.mjs'
 
 const root = process.cwd()
 const statePath = loopStatePath(root)
@@ -14,10 +15,33 @@ if (!existsSync(statePath)) {
 }
 
 let iteration = 'unknown'
+let cloneSessionId = ''
+let mcpSessionId = ''
 try {
   const state = parseState(readFileSync(statePath, 'utf8'))
   iteration = state?.frontmatter?.iteration || iteration
+  cloneSessionId = state?.frontmatter?.clone_session_id || ''
+  mcpSessionId = state?.frontmatter?.mcp_session_id || ''
 } catch {}
+
+if (cloneSessionId) {
+  try {
+    await stopCloneSession({
+      cloneSessionId,
+      mcpSessionId,
+      sourceDetail: 'clone-loop:cancel',
+    })
+    appendLoopHistory(historyPath, {
+      event: 'session-stopped',
+      reason: 'cancel',
+      clone_session_id: cloneSessionId,
+    })
+  } catch (error) {
+    console.error(
+      `Clone Loop: Failed to stop Clone session (${error?.message || String(error)}); removing state anyway.`,
+    )
+  }
+}
 
 removeLoopState(statePath)
 appendLoopHistory(historyPath, {

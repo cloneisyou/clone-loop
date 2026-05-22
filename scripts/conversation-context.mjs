@@ -557,7 +557,7 @@ function renderPriorIterTimelines(priorIterTimelines, options = {}) {
  *      oldest first if over the cap. Each `clone-prediction` turn is
  *      followed by a "### assistant (prior iter N timeline):" block when a
  *      matching entry is found in `priorIterTimelines`.
- *   3. "assistant (current iter N)" — what Claude did this iteration.
+ *   3. "assistant (current iter N)" — what the agent did this iteration.
  *      Preferred input: `iterationBlocks` (text + tool_use + tool_result
  *      timeline). Fallback: `assistantTexts` (text only). Never windowed so
  *      the freshest output cannot be lost.

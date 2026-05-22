@@ -2,15 +2,38 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { withCloneMcpServer } from './helpers/clone-mcp-server.mjs'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const setupPath = join(pluginRoot, 'scripts', 'setup-clone-loop.mjs')
 const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
+
+function runSetupAsync(workdir, args, env = {}) {
+  return new Promise((resolveRun) => {
+    const child = spawn(process.execPath, [setupPath, ...args], {
+      cwd: workdir,
+      env: {
+        ...process.env,
+        CLAUDE_PLUGIN_ROOT: pluginRoot,
+        CLONE_API_TOKEN: 'test-token',
+        ...env,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('close', (status) => resolveRun({ status, stdout, stderr }))
+  })
+}
 
 describe('Clone Loop setup script', () => {
   it('runs with Node only and writes loop state', () => {
@@ -105,6 +128,39 @@ describe('Clone Loop setup script', () => {
       const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
       assert.match(state, /session_id: codex-thread-123/)
       assert.match(state, /clone_agent: "Codex Clone Loop"/)
+    } finally {
+      rmSync(workdir, { recursive: true, force: true })
+    }
+  })
+
+  it('starts a Clone MCP session and records the initial prompt', async () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'clone-loop-setup-mcp-'))
+
+    try {
+      await withCloneMcpServer(
+        {
+          start_session: () => ({ session_id: 'clone-session-setup' }),
+          record_agent_prompt: () => ({ event_id: 'prompt-event-setup' }),
+        },
+        async (endpoint, calls) => {
+          const result = await runSetupAsync(
+            workdir,
+            ['bootstrap mcp memory'],
+            { CLONE_MCP_URL: endpoint },
+          )
+
+          assert.equal(result.status, 0, JSON.stringify(result))
+          const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
+          assert.match(state, /clone_session_id: "clone-session-setup"/)
+          assert.match(state, /mcp_session_id: "mcp-session-setup"/)
+          assert.match(state, /last_prompt_event_id: "prompt-event-setup"/)
+          const startCall = calls.find((call) => call.params?.name === 'start_session')
+          assert.ok(startCall)
+          assert.equal(startCall.params.arguments.source_detail, 'clone:loop')
+          assert.equal(calls.some((call) => call.params?.name === 'record_agent_prompt'), true)
+        },
+        { sessionId: 'mcp-session-setup' },
+      )
     } finally {
       rmSync(workdir, { recursive: true, force: true })
     }

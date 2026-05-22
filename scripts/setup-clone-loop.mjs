@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { formatIterationPromptLine } from './clone-display.mjs'
 import { claudeDir, loopHistoryPath, loopStatePath } from './clone-paths.mjs'
 import { isIntegerString, isThreshold, nowIso, quoteYaml } from './clone-utils.mjs'
+import { recordAgentPrompt, startCloneSession } from './clone-mcp.mjs'
 
 const args = process.argv.slice(2)
 const promptParts = []
@@ -23,7 +24,7 @@ ARGUMENTS:
 OPTIONS:
   --max-iterations <n>       Maximum iterations before auto-stop (default: unlimited)
   --clone-threshold <n>      Clone auto/escalation threshold in [0, 1] (default: 0.6)
-  --clone-agent '<text>'     Agent label sent to Clone (default: Claude Code Clone Loop)
+  --clone-agent '<text>'     Agent label sent to Clone (default: current runtime Clone Loop)
   -h, --help                 Show this help message
 
 DESCRIPTION:
@@ -108,7 +109,8 @@ started_at: "${startedAt}"
 ${prompt}
 `
 
-writeFileSync(loopStatePath(root), state)
+const statePath = loopStatePath(root)
+writeFileSync(statePath, state)
 
 try {
   appendFileSync(
@@ -125,6 +127,50 @@ try {
   )
 } catch {}
 
+async function bootstrapCloneSession() {
+  if (String(process.env.CLONE_LOOP_DISABLE_SESSION || '').trim() === '1') return
+  try {
+    const { cloneSessionId, mcpSessionId } = await startCloneSession({
+      sourceDetail: 'clone:loop',
+    })
+    const recorded = await recordAgentPrompt({
+      cloneSessionId,
+      mcpSessionId,
+      agent: cloneAgent,
+      prompt,
+      source: 'user',
+      sourceDetail: 'clone-loop:iteration-1',
+    })
+    const promptEventId = recorded?.eventId || ''
+
+    let content = readFileSync(statePath, 'utf8')
+    const insert = []
+    if (cloneSessionId) insert.push(`clone_session_id: ${quoteYaml(cloneSessionId)}`)
+    if (mcpSessionId) insert.push(`mcp_session_id: ${quoteYaml(mcpSessionId)}`)
+    if (promptEventId) insert.push(`last_prompt_event_id: ${quoteYaml(promptEventId)}`)
+    if (insert.length) {
+      content = content.replace(/^started_at: .*$/m, (match) => `${match}\n${insert.join('\n')}`)
+      writeFileSync(statePath, content)
+    }
+    appendFileSync(
+      loopHistoryPath(root),
+      `${JSON.stringify({
+        ts: nowIso(),
+        event: 'session-started',
+        clone_session_id: cloneSessionId,
+        mcp_session_id: mcpSessionId,
+        prompt_event_id: promptEventId,
+      })}\n`,
+    )
+  } catch (error) {
+    console.error(
+      `Clone Loop: Clone MCP session bootstrap failed; continuing without session context. (${error?.message || String(error)})`,
+    )
+  }
+}
+
+await bootstrapCloneSession()
+
 console.log(`${formatIterationPromptLine({ iteration: 1, prompt })}
 
 Clone Loop activated.
@@ -133,7 +179,7 @@ Max iterations: ${Number(maxIterations) > 0 ? maxIterations : 'unlimited'}
 Clone threshold: ${cloneThreshold}
 Clone agent: ${cloneAgent}
 
-The stop hook is active. On each stop, Claude will ask Clone MCP to predict
+The stop hook is active. On each stop, the agent will ask Clone MCP to predict
 the next user prompt and continue only when confidence clears the threshold.
 
 To monitor: head -10 .claude/clone-loop.local.md`)
