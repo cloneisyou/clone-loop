@@ -17,6 +17,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/clone-logo-spin-white.gif" alt="Clone logo spinning" width="180">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#how-it-works">How It Works</a> ·
   <a href="#commands">Commands</a> ·
