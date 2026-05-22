@@ -32,10 +32,17 @@ function writeState(workdir, overrides = {}) {
     session_id: 'session-123',
     clone_threshold: 0.6,
     clone_agent: 'Claude Code Clone Loop',
+    clone_session_id: '',
+    mcp_session_id: '',
+    last_prompt_event_id: '',
     started_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     prompt: 'Fix the bug and run tests.',
     ...stateOverrides,
   }
+  const optionalLines = []
+  if (state.clone_session_id) optionalLines.push(`clone_session_id: "${state.clone_session_id}"`)
+  if (state.mcp_session_id) optionalLines.push(`mcp_session_id: "${state.mcp_session_id}"`)
+  if (state.last_prompt_event_id) optionalLines.push(`last_prompt_event_id: "${state.last_prompt_event_id}"`)
 
   mkdirSync(join(workdir, '.claude'), { recursive: true })
   writeFileSync(
@@ -47,6 +54,7 @@ session_id: ${state.session_id}
 clone_threshold: ${state.clone_threshold}
 clone_agent: "${state.clone_agent}"
 started_at: "${state.started_at}"
+${optionalLines.join('\n')}
 ---
 ${state.prompt}
 `,
@@ -135,6 +143,8 @@ function runHook(workdir, endpoint, options = {}) {
 
 async function withMcpServer(prediction, callback) {
   const calls = []
+  let responseCount = 0
+  let promptCount = 0
   const server = createServer(async (req, res) => {
     let body = ''
     req.setEncoding('utf8')
@@ -157,13 +167,28 @@ async function withMcpServer(prediction, callback) {
     }
 
     assert.equal(payload.method, 'tools/call')
-    assert.equal(req.headers['mcp-session-id'], 'mcp-session-123')
+    assert.ok(req.headers['mcp-session-id'])
+    const toolName = payload.params?.name
+    let responseBody
+    if (toolName === 'predict_next_prompt') {
+      responseBody = prediction
+    } else if (toolName === 'record_agent_response') {
+      responseCount += 1
+      responseBody = { event_id: `response-event-${responseCount}` }
+    } else if (toolName === 'record_agent_prompt') {
+      promptCount += 1
+      responseBody = { event_id: `prompt-event-${promptCount}` }
+    } else if (toolName === 'submit_feedback' || toolName === 'stop_session') {
+      responseBody = { ok: true }
+    } else {
+      throw new Error(`Unexpected tool call: ${toolName}`)
+    }
     res.end(
       `data: ${JSON.stringify({
         jsonrpc: '2.0',
         id: payload.id,
         result: {
-          content: [{ type: 'text', text: JSON.stringify(prediction) }],
+          content: [{ type: 'text', text: JSON.stringify(responseBody) }],
         },
       })}\n\n`,
     )
@@ -958,6 +983,48 @@ describe('Clone Loop v2 stop hook', () => {
         assert.match(result.stderr, /stale-expired-state/)
         assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
         assert.equal(calls.length, 0)
+      },
+    )
+  })
+
+  it('records response and prompt in the active Clone MCP session', async () => {
+    writeState(workdir, {
+      clone_session_id: 'clone-session-stop',
+      mcp_session_id: 'mcp-session-stop',
+      last_prompt_event_id: 'prompt-event-prev',
+    })
+
+    await withMcpServer(
+      {
+        id: 'prediction-record-session',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'Run the focused regression tests.',
+        confidence: 0.96,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+
+        const responseCall = calls.find((call) => call.params?.name === 'record_agent_response')
+        assert.ok(responseCall)
+        assert.equal(responseCall.params.arguments.session_id, 'clone-session-stop')
+        assert.equal(responseCall.params.arguments.in_response_to, 'prompt-event-prev')
+
+        const predictCall = calls.find((call) => call.params?.name === 'predict_next_prompt')
+        assert.ok(predictCall)
+        assert.equal(predictCall.params.arguments.session_id, 'clone-session-stop')
+
+        const promptCall = calls.find((call) => call.params?.name === 'record_agent_prompt')
+        assert.ok(promptCall)
+        assert.equal(promptCall.params.arguments.session_id, 'clone-session-stop')
+        assert.equal(promptCall.params.arguments.prompt, 'Run the focused regression tests.')
+        assert.equal(promptCall.params.arguments.source, 'clone-prediction')
+
+        const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
+        assert.match(state, /last_prompt_event_id: "prompt-event-1"/)
       },
     )
   })

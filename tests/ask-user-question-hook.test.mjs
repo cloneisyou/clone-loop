@@ -18,10 +18,17 @@ function writeState(workdir, overrides = {}) {
     session_id: 'session-123',
     clone_threshold: 0.6,
     clone_agent: 'Claude Code Clone Loop',
+    clone_session_id: '',
+    mcp_session_id: '',
+    last_prompt_event_id: '',
     started_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     prompt: 'Fix the bug and run tests.',
     ...stateOverrides,
   }
+  const optionalLines = []
+  if (state.clone_session_id) optionalLines.push(`clone_session_id: "${state.clone_session_id}"`)
+  if (state.mcp_session_id) optionalLines.push(`mcp_session_id: "${state.mcp_session_id}"`)
+  if (state.last_prompt_event_id) optionalLines.push(`last_prompt_event_id: "${state.last_prompt_event_id}"`)
 
   mkdirSync(join(workdir, '.claude'), { recursive: true })
   writeFileSync(
@@ -33,6 +40,7 @@ session_id: ${state.session_id}
 clone_threshold: ${state.clone_threshold}
 clone_agent: "${state.clone_agent}"
 started_at: "${state.started_at}"
+${optionalLines.join('\n')}
 ---
 ${state.prompt}
 `,
@@ -117,6 +125,7 @@ function runHook(workdir, endpoint, toolInput, options = {}) {
 async function withMcpServer(predictions, callback) {
   const calls = []
   const queue = Array.isArray(predictions) ? [...predictions] : [predictions]
+  let recordPromptCount = 0
   const server = createServer(async (req, res) => {
     let body = ''
     req.setEncoding('utf8')
@@ -139,14 +148,28 @@ async function withMcpServer(predictions, callback) {
     }
 
     assert.equal(payload.method, 'tools/call')
-    assert.equal(req.headers['mcp-session-id'], 'mcp-session-123')
-    const prediction = queue.shift()
+    assert.ok(req.headers['mcp-session-id'])
+    const toolName = payload.params?.name
+    let responseBody
+    if (toolName === 'predict_next_prompt') {
+      responseBody = queue.shift()
+    } else if (toolName === 'submit_feedback') {
+      responseBody = { ok: true }
+    } else if (toolName === 'record_agent_prompt') {
+      recordPromptCount += 1
+      responseBody = { event_id: `ask-prompt-event-${recordPromptCount}` }
+    } else {
+      throw new Error(`Unexpected tool call: ${toolName}`)
+    }
+    if (responseBody?.mcp_session_id) {
+      res.setHeader('mcp-session-id', responseBody.mcp_session_id)
+    }
     res.end(
       `data: ${JSON.stringify({
         jsonrpc: '2.0',
         id: payload.id,
         result: {
-          content: [{ type: 'text', text: JSON.stringify(prediction) }],
+          content: [{ type: 'text', text: JSON.stringify(responseBody) }],
         },
       })}\n\n`,
     )
@@ -218,15 +241,12 @@ describe('AskUserQuestion PreToolUse hook', () => {
         const result = await runHook(workdir, endpoint, toolInput)
 
         assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
-        assert.deepEqual(
-          calls.map((call) => call.method),
-          ['initialize', 'tools/call'],
-        )
-        assert.equal(calls[1].params.name, 'predict_next_prompt')
-        assert.match(calls[1].params.arguments.agent_input, /What should we do next\?/)
-        assert.match(calls[1].params.arguments.agent_input, /Run tests/)
-        assert.equal(calls[1].params.arguments.threshold, 0.6)
-        assert.equal(calls[1].params.arguments.k, 1)
+        const predictCall = calls.find((call) => call.params?.name === 'predict_next_prompt')
+        assert.ok(predictCall)
+        assert.match(predictCall.params.arguments.agent_input, /What should we do next\?/)
+        assert.match(predictCall.params.arguments.agent_input, /Run tests/)
+        assert.equal(predictCall.params.arguments.threshold, 0.6)
+        assert.equal(predictCall.params.arguments.k, 1)
 
         const output = JSON.parse(result.stdout)
         assert.equal(output.hookSpecificOutput.hookEventName, 'PreToolUse')
@@ -446,12 +466,65 @@ describe('AskUserQuestion PreToolUse hook', () => {
         const result = await runHook(workdir, endpoint, toolInput)
 
         assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
-        const agentInput = calls[1].params.arguments.agent_input
+        const predictCall = calls.find((call) => call.params?.name === 'predict_next_prompt')
+        assert.ok(predictCall)
+        const agentInput = predictCall.params.arguments.agent_input
         assert.match(agentInput, /### user \(clone-prediction\):/)
         assert.match(agentInput, /Run lint after the tests pass\./)
         assert.match(agentInput, /Which option\?/)
         assert.match(agentInput, /Run focused tests/)
         assert.match(agentInput, /Open a PR/)
+      },
+    )
+  })
+
+  it('records accepted auto answers to the active Clone MCP session', async () => {
+    writeState(workdir, {
+      clone_session_id: 'clone-session-question',
+      mcp_session_id: 'mcp-session-question',
+      last_prompt_event_id: 'prompt-event-prev',
+    })
+
+    await withMcpServer(
+      {
+        id: 'question-prediction-record',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'Run focused tests, then push the branch.',
+        confidence: 0.94,
+        mcp_session_id: 'mcp-session-question-new',
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, {
+          questions: [
+            {
+              question: 'What is next?',
+              options: [{ label: 'Run tests' }, { label: 'Push branch' }],
+            },
+          ],
+        })
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+
+        const feedbackCall = calls.find((call) => call.params?.name === 'submit_feedback')
+        assert.ok(feedbackCall)
+        assert.deepEqual(feedbackCall.params.arguments, {
+          prediction_id: 'question-prediction-record',
+          status: 'accepted',
+        })
+
+        const recordCall = calls.find((call) => call.params?.name === 'record_agent_prompt')
+        assert.ok(recordCall)
+        assert.equal(recordCall.params.arguments.session_id, 'clone-session-question')
+        assert.equal(recordCall.params.arguments.agent, 'Claude Code Clone Loop')
+        assert.equal(recordCall.params.arguments.source, 'auto-answer')
+        assert.match(recordCall.params.arguments.source_detail, /clone-loop:ask-user-question/)
+        assert.match(recordCall.params.arguments.prompt, /Q: What is next\?/)
+        assert.match(recordCall.params.arguments.prompt, /A: Run focused tests, then push the branch\./)
+
+        const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
+        assert.match(state, /mcp_session_id: "mcp-session-question-new"/)
+        assert.match(state, /last_prompt_event_id: "ask-prompt-event-1"/)
       },
     )
   })

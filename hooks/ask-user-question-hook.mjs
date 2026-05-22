@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { loopHistoryPath, loopStatePath } from '../scripts/clone-paths.mjs'
-import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 import {
   HISTORY_WINDOW_TURNS,
   assistantTextsThisIteration,
@@ -16,7 +15,7 @@ import {
   appendLoopHistory,
   validateActiveLoopState,
 } from '../scripts/loop-state-guard.mjs'
-import { cloneMcpClientInfo, cloneMcpEndpoint, cloneMcpRpc } from '../scripts/clone-mcp-client.mjs'
+import { clonePredictNextPrompt, recordAgentPrompt, submitFeedback } from '../scripts/clone-mcp.mjs'
 import { numeric, parseJson, readStdin } from '../scripts/clone-utils.mjs'
 import { mapPredictionToOption, rankedPredictionCandidates } from '../scripts/interview-answer-utils.mjs'
 
@@ -25,39 +24,6 @@ const LOOP_HISTORY_FILE = loopHistoryPath()
 
 function appendHistory(record) {
   appendLoopHistory(LOOP_HISTORY_FILE, record)
-}
-
-async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId }) {
-  const endpoint = cloneMcpEndpoint()
-  const { token } = resolveCloneToken()
-
-  const init = await cloneMcpRpc(endpoint, token, 'initialize', {
-    protocolVersion: '2024-11-05',
-    capabilities: {},
-    clientInfo: cloneMcpClientInfo(),
-  })
-
-  const args = {
-    agent,
-    agent_input: agentInput,
-    k: 1,
-    threshold: Number(threshold || '0.6'),
-  }
-  if (sessionId) args.session_id = sessionId
-
-  const prediction = await cloneMcpRpc(
-    endpoint,
-    token,
-    'tools/call',
-    { name: 'predict_next_prompt', arguments: args },
-    init.sessionId,
-  )
-
-  const content = prediction.payload?.result?.content?.[0]
-  if (!content || content.type !== 'text') {
-    throw new Error('Clone MCP returned no text prediction content.')
-  }
-  return JSON.parse(content.text)
 }
 
 function numericConfidence(value, fallback = 0) {
@@ -226,6 +192,57 @@ function deferQuestion({ decision, question, threshold, prediction, confidence, 
   })
 }
 
+function updateFrontmatter(content, key, value) {
+  const escaped = String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const replacement = `${key}: "${escaped}"`
+  const pattern = new RegExp(`^${key}: .*$`, 'm')
+  if (pattern.test(content)) {
+    return content.replace(pattern, replacement)
+  }
+  return content.replace(/^---\r?\n([\s\S]*?)\r?\n---/, (_, body) => `---\n${body}\n${replacement}\n---`)
+}
+
+async function safeFeedback({ predictionId, status, mcpSessionId }) {
+  if (!predictionId) return
+  try {
+    await submitFeedback({ predictionId, status, mcpSessionId })
+    appendHistory({ event: 'feedback-sent', source: 'ask-user-question', prediction_id: predictionId, status })
+  } catch (error) {
+    appendHistory({ event: 'feedback-sent', source: 'ask-user-question', prediction_id: predictionId, status, error: error?.message || String(error) })
+  }
+}
+
+async function safeReject({ predictionId, mcpSessionId }) {
+  await safeFeedback({ predictionId, status: 'rejected', mcpSessionId })
+}
+
+async function safeRecordAnswer({ cloneSessionId, mcpSessionId, agent, question, answer, iteration }) {
+  if (!cloneSessionId || !answer) return null
+  try {
+    const result = await recordAgentPrompt({
+      cloneSessionId,
+      mcpSessionId,
+      agent,
+      prompt: `Q: ${question}\nA: ${answer}`,
+      source: 'auto-answer',
+      sourceDetail: `clone-loop:ask-user-question:iteration-${iteration || 'unknown'}`,
+    })
+    appendHistory({
+      event: 'record-prompt',
+      source: 'ask-user-question',
+      event_id: result?.eventId || null,
+    })
+    return result
+  } catch (error) {
+    appendHistory({
+      event: 'record-prompt',
+      source: 'ask-user-question',
+      error: error?.message || String(error),
+    })
+    return null
+  }
+}
+
 async function main() {
   const hookInput = parseJson(await readStdin())
   if (hookInput.tool_name && hookInput.tool_name !== 'AskUserQuestion') return
@@ -247,6 +264,7 @@ async function main() {
     clone_agent: cloneAgentRaw,
     clone_session_id: cloneSessionId,
     mcp_session_id: mcpSessionIdInitial,
+    iteration,
   } = state.frontmatter
 
   const toolInput = hookInput.tool_input || {}
@@ -256,7 +274,9 @@ async function main() {
   const cloneThreshold = cloneThresholdRaw || '0.6'
   const cloneAgent = cloneAgentRaw || 'Claude Code Clone Loop'
   const answers = {}
+  const acceptedPredictions = []
   const confidenceValues = []
+  let activeMcpSessionId = mcpSessionIdInitial || ''
 
   for (const [questionIndex, question] of questions.entries()) {
     if (question?.multiSelect) {
@@ -286,7 +306,7 @@ async function main() {
         }),
         threshold: cloneThreshold,
         sessionId: cloneSessionId || undefined,
-        mcpSessionId: mcpSessionIdInitial,
+        mcpSessionId: activeMcpSessionId,
       })
     } catch (error) {
       deferQuestion({
@@ -306,7 +326,14 @@ async function main() {
         prediction,
         confidence: prediction.confidence,
       })
+      await safeReject({ predictionId: prediction.id, mcpSessionId: activeMcpSessionId })
       return
+    }
+
+    if (prediction.mcp_session_id && prediction.mcp_session_id !== activeMcpSessionId) {
+      activeMcpSessionId = prediction.mcp_session_id
+      const updated = updateFrontmatter(readFileSync(LOOP_STATE_FILE, 'utf8'), 'mcp_session_id', activeMcpSessionId)
+      writeFileSync(LOOP_STATE_FILE, updated)
     }
 
     const predictedResponse = String(prediction?.predicted_response || '').trim()
@@ -327,6 +354,7 @@ async function main() {
         prediction,
         confidence: prediction?.confidence,
       })
+      await safeReject({ predictionId: prediction?.id, mcpSessionId: activeMcpSessionId })
       return
     }
 
@@ -338,10 +366,16 @@ async function main() {
         prediction,
         confidence: selection.confidence,
       })
+      await safeReject({ predictionId: prediction.id, mcpSessionId: activeMcpSessionId })
       return
     }
 
     answers[questionText] = selection.answer
+    acceptedPredictions.push({
+      predictionId: prediction.id || '',
+      question: questionText,
+      answer: selection.answer,
+    })
     confidenceValues.push(selection.confidence)
   }
 
@@ -353,6 +387,29 @@ async function main() {
     threshold: Number(cloneThreshold),
     answers,
   })
+  for (const accepted of acceptedPredictions) {
+    await safeFeedback({
+      predictionId: accepted.predictionId,
+      status: 'accepted',
+      mcpSessionId: activeMcpSessionId,
+    })
+    const recorded = await safeRecordAnswer({
+      cloneSessionId,
+      mcpSessionId: activeMcpSessionId,
+      agent: cloneAgent,
+      question: accepted.question,
+      answer: accepted.answer,
+      iteration,
+    })
+    if (recorded?.eventId) {
+      const updated = updateFrontmatter(
+        readFileSync(LOOP_STATE_FILE, 'utf8'),
+        'last_prompt_event_id',
+        recorded.eventId,
+      )
+      writeFileSync(LOOP_STATE_FILE, updated)
+    }
+  }
   allowAnswer({ toolInput, answers, confidence, threshold: cloneThreshold })
 }
 

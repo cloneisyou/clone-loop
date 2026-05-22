@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { formatIterationPromptLine } from './clone-display.mjs'
 import { claudeDir, loopHistoryPath, loopStatePath } from './clone-paths.mjs'
 import { isIntegerString, isThreshold, nowIso, quoteYaml } from './clone-utils.mjs'
+import { recordAgentPrompt, startCloneSession } from './clone-mcp.mjs'
 
 const args = process.argv.slice(2)
 const promptParts = []
@@ -108,7 +109,8 @@ started_at: "${startedAt}"
 ${prompt}
 `
 
-writeFileSync(loopStatePath(root), state)
+const statePath = loopStatePath(root)
+writeFileSync(statePath, state)
 
 try {
   appendFileSync(
@@ -124,6 +126,50 @@ try {
     })}\n`,
   )
 } catch {}
+
+async function bootstrapCloneSession() {
+  if (String(process.env.CLONE_LOOP_DISABLE_SESSION || '').trim() === '1') return
+  try {
+    const { cloneSessionId, mcpSessionId } = await startCloneSession({
+      sourceDetail: 'clone-loop:setup',
+    })
+    const recorded = await recordAgentPrompt({
+      cloneSessionId,
+      mcpSessionId,
+      agent: cloneAgent,
+      prompt,
+      source: 'user',
+      sourceDetail: 'clone-loop:iteration-1',
+    })
+    const promptEventId = recorded?.eventId || ''
+
+    let content = readFileSync(statePath, 'utf8')
+    const insert = []
+    if (cloneSessionId) insert.push(`clone_session_id: ${quoteYaml(cloneSessionId)}`)
+    if (mcpSessionId) insert.push(`mcp_session_id: ${quoteYaml(mcpSessionId)}`)
+    if (promptEventId) insert.push(`last_prompt_event_id: ${quoteYaml(promptEventId)}`)
+    if (insert.length) {
+      content = content.replace(/^started_at: .*$/m, (match) => `${match}\n${insert.join('\n')}`)
+      writeFileSync(statePath, content)
+    }
+    appendFileSync(
+      loopHistoryPath(root),
+      `${JSON.stringify({
+        ts: nowIso(),
+        event: 'session-started',
+        clone_session_id: cloneSessionId,
+        mcp_session_id: mcpSessionId,
+        prompt_event_id: promptEventId,
+      })}\n`,
+    )
+  } catch (error) {
+    console.error(
+      `Clone Loop: Clone MCP session bootstrap failed; continuing without session context. (${error?.message || String(error)})`,
+    )
+  }
+}
+
+await bootstrapCloneSession()
 
 console.log(`${formatIterationPromptLine({ iteration: 1, prompt })}
 

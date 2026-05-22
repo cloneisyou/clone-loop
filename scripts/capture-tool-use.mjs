@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { appendLoopHistory, validateActiveLoopState } from './loop-state-guard.mjs'
+import { recordAgentResponse } from './clone-mcp.mjs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { loopHistoryPath, loopStatePath } from './clone-paths.mjs'
 import { parseJson, readStdin, stringValue } from './clone-utils.mjs'
@@ -59,6 +61,58 @@ function appendHistory(record) {
   appendLoopHistory(LOOP_HISTORY_FILE, record)
 }
 
+function updateFrontmatter(content, key, value) {
+  const escaped = String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const replacement = `${key}: "${escaped}"`
+  const pattern = new RegExp(`^${key}: .*$`, 'm')
+  if (pattern.test(content)) return content.replace(pattern, replacement)
+  return content.replace(/^---\r?\n([\s\S]*?)\r?\n---/, (_, body) => `---\n${body}\n${replacement}\n---`)
+}
+
+async function safeRecordToolUse({ state, toolName, summary }) {
+  const {
+    clone_session_id: cloneSessionId,
+    mcp_session_id: mcpSessionId,
+    last_prompt_event_id: lastPromptEventId,
+    clone_agent: cloneAgentRaw,
+    iteration,
+  } = state.frontmatter
+  if (!cloneSessionId || !summary) return null
+
+  try {
+    const result = await recordAgentResponse({
+      cloneSessionId,
+      mcpSessionId,
+      agent: cloneAgentRaw || 'Claude Code Clone Loop',
+      response: `Tool use: ${summary}`,
+      inResponseTo: lastPromptEventId || undefined,
+      source: 'tool-use',
+      sourceDetail: `clone-loop:iteration-${iteration || 'unknown'}:${toolName}`,
+    })
+    if (result?.mcpSessionId && result.mcpSessionId !== mcpSessionId) {
+      const updated = updateFrontmatter(readFileSync(LOOP_STATE_FILE, 'utf8'), 'mcp_session_id', result.mcpSessionId)
+      writeFileSync(LOOP_STATE_FILE, updated)
+    }
+    appendHistory({
+      event: 'record-response',
+      source: 'post-tool-use',
+      iteration: Number(iteration || 0),
+      tool_name: toolName,
+      event_id: result?.eventId || null,
+    })
+    return result
+  } catch (error) {
+    appendHistory({
+      event: 'record-response',
+      source: 'post-tool-use',
+      iteration: Number(iteration || 0),
+      tool_name: toolName,
+      error: error?.message || String(error),
+    })
+    return null
+  }
+}
+
 async function main() {
   const hookInput = parseJson(await readStdin())
   const root = hookInput.cwd ? resolve(String(hookInput.cwd)) : process.cwd()
@@ -85,6 +139,7 @@ async function main() {
     : {}
   const filePath = extractFilePath(toolInput)
   const success = extractSuccess(toolResponse)
+  const summary = summarize({ toolName, filePath, toolInput, toolResponse })
 
   appendHistory({
     event: 'post-tool-use',
@@ -92,8 +147,10 @@ async function main() {
     tool_name: toolName,
     file_path: filePath || null,
     success,
-    summary: summarize({ toolName, filePath, toolInput, toolResponse }),
+    clone_session_id: state.frontmatter.clone_session_id || null,
+    summary,
   })
+  await safeRecordToolUse({ state, toolName, summary })
 }
 
 main().catch((error) => {
