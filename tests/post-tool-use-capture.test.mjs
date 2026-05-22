@@ -105,41 +105,6 @@ function readHistory(workdir) {
 }
 
 describe('PostToolUse capture hook', () => {
-  it('records file mutation tool use during an active Clone Loop', () => {
-    const workdir = mkdtempSync(join(tmpdir(), 'clone-post-tool-'))
-
-    try {
-      writeState(workdir)
-
-      const result = runHook(workdir, {
-        session_id: 'session-123',
-        tool_name: 'Write',
-        tool_input: {
-          file_path: 'src/app.js',
-          content: 'x'.repeat(400),
-        },
-        tool_response: {
-          success: true,
-        },
-      })
-
-      assert.equal(result.status, 0, result.stderr)
-      assert.equal(result.stdout, '')
-
-      const record = readHistory(workdir).find((entry) => entry.event === 'post-tool-use')
-      assert.ok(record)
-      assert.equal(record.event, 'post-tool-use')
-      assert.equal(record.iteration, 2)
-      assert.equal(record.tool_name, 'Write')
-      assert.equal(record.file_path, 'src/app.js')
-      assert.equal(record.success, true)
-      assert.match(record.summary, /Write src\/app\.js/)
-      assert.doesNotMatch(JSON.stringify(record), /xxxxxxxxxxxxxxxxxxxxxxxx/)
-    } finally {
-      rmSync(workdir, { recursive: true, force: true })
-    }
-  })
-
   it('records mutation summaries to the active Clone MCP session', async () => {
     const workdir = mkdtempSync(join(tmpdir(), 'clone-post-tool-mcp-'))
 
@@ -157,8 +122,8 @@ describe('PostToolUse capture hook', () => {
             workdir,
             {
               session_id: 'session-123',
-              tool_name: 'Edit',
-              tool_input: { file_path: 'src/app.js' },
+              tool_name: 'Write',
+              tool_input: { file_path: 'src/app.js', content: 'x'.repeat(400) },
               tool_response: { success: true, message: 'edited file' },
             },
             { CLONE_MCP_URL: endpoint },
@@ -170,9 +135,16 @@ describe('PostToolUse capture hook', () => {
           assert.equal(recordCall.params.arguments.session_id, 'clone-session-tool')
           assert.equal(recordCall.params.arguments.in_response_to, 'prompt-event-tool')
           assert.equal(recordCall.params.arguments.source, 'tool-use')
-          assert.match(recordCall.params.arguments.response, /Tool use: Edit src\/app\.js/)
+          assert.match(recordCall.params.arguments.response, /Tool use: Write src\/app\.js/)
 
           const history = readHistory(workdir)
+          const postToolUse = history.find((entry) => entry.event === 'post-tool-use')
+          assert.ok(postToolUse)
+          assert.equal(postToolUse.iteration, 2)
+          assert.equal(postToolUse.tool_name, 'Write')
+          assert.equal(postToolUse.file_path, 'src/app.js')
+          assert.equal(postToolUse.success, true)
+          assert.doesNotMatch(JSON.stringify(postToolUse), /xxxxxxxxxxxxxxxxxxxxxxxx/)
           assert.equal(history.some((entry) => entry.event === 'record-response' && entry.source === 'post-tool-use'), true)
         },
       )

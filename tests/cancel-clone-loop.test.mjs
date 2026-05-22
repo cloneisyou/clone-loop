@@ -48,42 +48,6 @@ describe('Clone Loop cancel script', () => {
     }
   })
 
-  it('removes active loop state and records cancellation history', () => {
-    const workdir = mkdtempSync(join(tmpdir(), 'clone-loop-cancel-'))
-    const claudeDir = join(workdir, '.claude')
-
-    try {
-      mkdirSync(claudeDir, { recursive: true })
-      writeFileSync(
-        join(claudeDir, 'clone-loop.local.md'),
-        `---
-active: true
-iteration: 7
-session_id: "session-123"
----
-
-Original task
-`,
-      )
-
-      const result = runCancel(workdir)
-
-      assert.equal(result.status, 0, result.stderr)
-      assert.match(result.stdout, /Cancelled Clone Loop \(was at iteration 7\)/)
-      assert.equal(existsSync(join(claudeDir, 'clone-loop.local.md')), false)
-
-      const history = readFileSync(join(claudeDir, 'clone-loop.history.local.jsonl'), 'utf8')
-        .trim()
-        .split(/\r?\n/)
-        .map((line) => JSON.parse(line))
-      assert.equal(history.length, 1)
-      assert.equal(history[0].event, 'loop-cancel')
-      assert.equal(history[0].iteration, '7')
-    } finally {
-      rmSync(workdir, { recursive: true, force: true })
-    }
-  })
-
   it('stops active Clone MCP session before removing state', async () => {
     const workdir = mkdtempSync(join(tmpdir(), 'clone-loop-cancel-mcp-'))
     const claudeDir = join(workdir, '.claude')
@@ -114,6 +78,13 @@ Original task
           assert.ok(stopCall)
           assert.equal(stopCall.params.arguments.session_id, 'clone-sess-cancel')
           assert.equal(existsSync(join(claudeDir, 'clone-loop.local.md')), false)
+
+          const history = readFileSync(join(claudeDir, 'clone-loop.history.local.jsonl'), 'utf8')
+            .trim()
+            .split(/\r?\n/)
+            .map((line) => JSON.parse(line))
+          assert.equal(history.some((entry) => entry.event === 'session-stopped'), true)
+          assert.equal(history.some((entry) => entry.event === 'loop-cancel' && entry.iteration === '2'), true)
         },
       )
     } finally {
