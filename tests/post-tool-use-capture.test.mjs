@@ -10,14 +10,16 @@ const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'scripts', 'capture-tool-use.mjs')
 
 function writeState(workdir, overrides = {}) {
+  const { writeLoopStart = true, ...stateOverrides } = overrides
   const state = {
     iteration: 2,
     max_iterations: 5,
     session_id: 'session-123',
     clone_threshold: 0.6,
     clone_agent: 'Claude Code Clone Loop',
+    started_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     prompt: 'Ship the feature.',
-    ...overrides,
+    ...stateOverrides,
   }
 
   mkdirSync(join(workdir, '.claude'), { recursive: true })
@@ -29,10 +31,25 @@ max_iterations: ${state.max_iterations}
 session_id: ${state.session_id}
 clone_threshold: ${state.clone_threshold}
 clone_agent: "${state.clone_agent}"
+started_at: "${state.started_at}"
 ---
 ${state.prompt}
 `,
   )
+  if (writeLoopStart) {
+    writeFileSync(
+      join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
+      `${JSON.stringify({
+        ts: state.started_at,
+        event: 'loop-start',
+        session_id: state.session_id,
+        max_iterations: Number(state.max_iterations),
+        clone_threshold: Number(state.clone_threshold),
+        clone_agent: state.clone_agent,
+        prompt: state.prompt,
+      })}\n`,
+    )
+  }
 }
 
 function runHook(workdir, payload) {
@@ -77,7 +94,8 @@ describe('PostToolUse capture hook', () => {
       assert.equal(result.status, 0, result.stderr)
       assert.equal(result.stdout, '')
 
-      const [record] = readHistory(workdir)
+      const record = readHistory(workdir).find((entry) => entry.event === 'post-tool-use')
+      assert.ok(record)
       assert.equal(record.event, 'post-tool-use')
       assert.equal(record.iteration, 2)
       assert.equal(record.tool_name, 'Write')
@@ -112,10 +130,36 @@ describe('PostToolUse capture hook', () => {
       })
       assert.equal(mismatch.status, 0, mismatch.stderr)
       assert.equal(mismatch.stdout, '')
-      assert.equal(existsSync(join(mismatchDir, '.claude', 'clone-loop.history.local.jsonl')), false)
+      const mismatchHistory = readHistory(mismatchDir)
+      assert.equal(mismatchHistory.some((entry) => entry.decision === 'stale-session-state'), true)
+      assert.equal(existsSync(join(mismatchDir, '.claude', 'clone-loop.local.md')), false)
     } finally {
       rmSync(inactiveDir, { recursive: true, force: true })
       rmSync(mismatchDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not capture tool use when loop-start is missing', () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'clone-post-tool-stale-'))
+
+    try {
+      writeState(workdir, { writeLoopStart: false })
+
+      const result = runHook(workdir, {
+        session_id: 'session-123',
+        tool_name: 'Write',
+        tool_input: { file_path: 'README.md' },
+        tool_response: { success: true },
+      })
+
+      assert.equal(result.status, 0, result.stderr)
+      assert.equal(result.stdout, '')
+      const history = readHistory(workdir)
+      assert.equal(history.some((entry) => entry.decision === 'stale-missing-loop-start'), true)
+      assert.equal(history.some((entry) => entry.event === 'post-tool-use' && entry.tool_name === 'Write'), false)
+      assert.equal(existsSync(join(workdir, '.claude', 'clone-loop.local.md')), false)
+    } finally {
+      rmSync(workdir, { recursive: true, force: true })
     }
   })
 })

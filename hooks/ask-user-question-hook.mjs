@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 import {
@@ -12,19 +12,17 @@ import {
   loadInjectedUserTurns,
   loadIterationBoundaries,
 } from '../scripts/conversation-context.mjs'
+import {
+  appendLoopHistory,
+  validateActiveLoopState,
+} from '../scripts/loop-state-guard.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const CLIENT_VERSION = '0.14.0'
 
-function nowIso() {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-}
-
 function appendHistory(record) {
-  try {
-    appendFileSync(LOOP_HISTORY_FILE, `${JSON.stringify({ ts: nowIso(), ...record })}\n`)
-  } catch {}
+  appendLoopHistory(LOOP_HISTORY_FILE, record)
 }
 
 function readStdin() {
@@ -41,34 +39,6 @@ function readStdin() {
 function parseJson(input) {
   const normalized = input.replace(/^\uFEFF/, '').trim()
   return normalized ? JSON.parse(normalized) : {}
-}
-
-function parseYamlScalar(value) {
-  const raw = value.trim()
-  if (raw === 'null') return null
-  if (raw.startsWith('"') && raw.endsWith('"')) {
-    return raw.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-  }
-  return raw
-}
-
-function parseState(content) {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) return null
-
-  const frontmatter = {}
-  for (const line of match[1].split(/\r?\n/)) {
-    const separator = line.indexOf(':')
-    if (separator < 0) continue
-    const key = line.slice(0, separator).trim()
-    const value = line.slice(separator + 1)
-    frontmatter[key] = parseYamlScalar(value)
-  }
-
-  return {
-    frontmatter,
-    prompt: match[2].replace(/^\r?\n/, ''),
-  }
 }
 
 function parseSse(text) {
@@ -427,24 +397,25 @@ async function safeReject({ predictionId, mcpSessionId }) {
 async function main() {
   const hookInput = parseJson(await readStdin())
   if (hookInput.tool_name && hookInput.tool_name !== 'AskUserQuestion') return
-  if (!existsSync(LOOP_STATE_FILE)) return
 
-  const state = parseState(readFileSync(LOOP_STATE_FILE, 'utf8'))
-  if (!state) {
-    appendHistory({ event: 'ask-user-question', decision: 'defer-corrupt-state' })
+  const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
+  const validation = validateActiveLoopState({
+    statePath: LOOP_STATE_FILE,
+    historyPath: LOOP_HISTORY_FILE,
+    hookSession,
+    source: 'ask-user-question',
+  })
+  if (!validation.ok) {
     return
   }
+  const { state } = validation
 
   const {
-    session_id: stateSession,
     clone_threshold: cloneThresholdRaw,
     clone_agent: cloneAgentRaw,
     clone_session_id: cloneSessionId,
     mcp_session_id: mcpSessionIdInitial,
   } = state.frontmatter
-
-  const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
-  if (stateSession && stateSession !== hookSession) return
 
   const toolInput = hookInput.tool_input || {}
   const questions = Array.isArray(toolInput.questions) ? toolInput.questions : []

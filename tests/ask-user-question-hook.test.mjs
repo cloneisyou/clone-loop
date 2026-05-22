@@ -11,14 +11,16 @@ const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'hooks', 'ask-user-question-hook.mjs')
 
 function writeState(workdir, overrides = {}) {
+  const { writeLoopStart = true, ...stateOverrides } = overrides
   const state = {
     iteration: 1,
     max_iterations: 3,
     session_id: 'session-123',
     clone_threshold: 0.6,
     clone_agent: 'Claude Code Clone Loop',
+    started_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     prompt: 'Fix the bug and run tests.',
-    ...overrides,
+    ...stateOverrides,
   }
 
   mkdirSync(join(workdir, '.claude'), { recursive: true })
@@ -30,10 +32,25 @@ max_iterations: ${state.max_iterations}
 session_id: ${state.session_id}
 clone_threshold: ${state.clone_threshold}
 clone_agent: "${state.clone_agent}"
+started_at: "${state.started_at}"
 ---
 ${state.prompt}
 `,
   )
+  if (writeLoopStart) {
+    writeFileSync(
+      join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
+      `${JSON.stringify({
+        ts: state.started_at,
+        event: 'loop-start',
+        session_id: state.session_id,
+        max_iterations: Number(state.max_iterations),
+        clone_threshold: Number(state.clone_threshold),
+        clone_agent: state.clone_agent,
+        prompt: state.prompt,
+      })}\n`,
+    )
+  }
 }
 
 function runHook(workdir, endpoint, toolInput, options = {}) {
@@ -360,17 +377,24 @@ describe('AskUserQuestion PreToolUse hook', () => {
     mkdirSync(join(workdir, '.claude'), { recursive: true })
     writeFileSync(
       join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
-      JSON.stringify({
-        ts: '2026-01-01T00:00:01Z',
-        event: 'stop',
-        decision: 'continue',
-        iteration: 1,
-        confidence: 0.9,
-        threshold: 0.6,
-        prediction_id: 'p-1',
-        status: 'auto',
-        predicted_response: 'Run lint after the tests pass.',
-      }) + '\n',
+      [
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:01Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 1,
+          confidence: 0.9,
+          threshold: 0.6,
+          prediction_id: 'p-1',
+          status: 'auto',
+          predicted_response: 'Run lint after the tests pass.',
+        }),
+      ].join('\n') + '\n',
     )
 
     const toolInput = {
@@ -400,6 +424,35 @@ describe('AskUserQuestion PreToolUse hook', () => {
         assert.match(agentInput, /Which option\?/)
         assert.match(agentInput, /Run focused tests/)
         assert.match(agentInput, /Open a PR/)
+      },
+    )
+  })
+
+  it('does not auto-answer and removes stale state when loop-start is missing', async () => {
+    writeState(workdir, { writeLoopStart: false })
+
+    await withMcpServer(
+      {
+        id: 'question-stale-state',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'Run focused tests',
+        confidence: 0.99,
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint, {
+          questions: [
+            {
+              question: 'Which option?',
+              options: [{ label: 'Run focused tests' }, { label: 'Open a PR' }],
+            },
+          ],
+        })
+
+        assert.equal(result.status, 0)
+        assert.equal(result.stdout, '')
+        assert.equal(calls.length, 0)
+        assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
       },
     )
   })
