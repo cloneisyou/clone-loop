@@ -2,6 +2,8 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { formatPredictedPromptSection, purpleBold } from '../scripts/clone-display.mjs'
+import { loopHistoryPath, loopStatePath } from '../scripts/clone-paths.mjs'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 import {
   HISTORY_WINDOW_TURNS,
@@ -17,32 +19,14 @@ import {
   removeLoopState,
   validateActiveLoopState,
 } from '../scripts/loop-state-guard.mjs'
+import { cloneMcpClientInfo, cloneMcpEndpoint, cloneMcpRpc } from '../scripts/clone-mcp-client.mjs'
+import { isIntegerString, parseJson, readStdin } from '../scripts/clone-utils.mjs'
 
-let LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
-let LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const CLIENT_VERSION = '0.14.5'
-const ANSI_BOLD = '\u001b[1m'
-const ANSI_PURPLE = '\u001b[35m'
-const ANSI_RESET = '\u001b[0m'
+let LOOP_STATE_FILE = loopStatePath()
+let LOOP_HISTORY_FILE = loopHistoryPath()
 
 function appendHistory(record) {
   appendLoopHistory(LOOP_HISTORY_FILE, record)
-}
-
-function readStdin() {
-  return new Promise((resolveRead) => {
-    let input = ''
-    process.stdin.setEncoding('utf8')
-    process.stdin.on('data', (chunk) => {
-      input += chunk
-    })
-    process.stdin.on('end', () => resolveRead(input))
-  })
-}
-
-function parseJson(input) {
-  const normalized = input.replace(/^\uFEFF/, '').trim()
-  return normalized ? JSON.parse(normalized) : {}
 }
 
 function removeState() {
@@ -53,96 +37,14 @@ function block(reason, systemMessage) {
   console.log(JSON.stringify({ decision: 'block', reason, systemMessage }, null, 2))
 }
 
-function formatPromptLines(value) {
-  return String(value || '')
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-}
-
-function purple(value) {
-  return `${ANSI_PURPLE}${value}${ANSI_RESET}`
-}
-
-function purpleBold(value) {
-  return `${ANSI_BOLD}${ANSI_PURPLE}${value}${ANSI_RESET}`
-}
-
-function formatIterationPromptLine({ iteration, prompt }) {
-  const [firstLine = '', ...remainingLines] = formatPromptLines(prompt)
-  const continuation = remainingLines.length
-    ? `\n${remainingLines.map((line) => purpleBold(`> ${line}`)).join('\n')}`
-    : ''
-  return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
-}
-
-function formatPredictedPromptSection({ iteration, predictedResponse, predictedConfidence, cloneThreshold, prediction }) {
-  const roundedConfidence = Number(predictedConfidence).toFixed(5)
-  return `${formatIterationPromptLine({ iteration, prompt: predictedResponse })}
-
-Confidence: ${roundedConfidence} / threshold: ${cloneThreshold}
-Prediction status: ${prediction.status || ''}
-Prediction id: ${prediction.id || ''}`
-}
-
-function isIntegerString(value) {
-  return /^[0-9]+$/.test(String(value || ''))
-}
-
-function parseSse(text) {
-  const frames = text
-    .split(/\r?\n\r?\n/)
-    .map((event) =>
-      event
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
-        .join('\n')
-        .trim(),
-    )
-    .filter(Boolean)
-
-  for (const frame of frames) {
-    try {
-      return JSON.parse(frame)
-    } catch {}
-  }
-
-  return JSON.parse(text)
-}
-
-async function rpc(endpoint, token, method, params = {}, sessionId = '') {
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-    'X-Clone-API-Key': token,
-  }
-  if (sessionId) headers['mcp-session-id'] = sessionId
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    throw new Error(`Clone MCP ${method} failed with HTTP ${res.status}: ${text.slice(0, 500)}`)
-  }
-
-  return {
-    sessionId: res.headers.get('mcp-session-id') || sessionId,
-    payload: text ? parseSse(text) : null,
-  }
-}
-
 async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId }) {
-  const endpoint = process.env.CLONE_MCP_URL || 'https://api.clone.is/mcp'
+  const endpoint = cloneMcpEndpoint()
   const { token } = resolveCloneToken()
 
-  const init = await rpc(endpoint, token, 'initialize', {
+  const init = await cloneMcpRpc(endpoint, token, 'initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'clone-loop', version: CLIENT_VERSION },
+    clientInfo: cloneMcpClientInfo(),
   })
 
   const args = {
@@ -153,7 +55,7 @@ async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId 
   }
   if (sessionId) args.session_id = sessionId
 
-  const prediction = await rpc(
+  const prediction = await cloneMcpRpc(
     endpoint,
     token,
     'tools/call',
@@ -203,8 +105,8 @@ async function main() {
   if (hookInput.stop_hook_active === true) return
 
   const root = hookInput.cwd ? resolve(String(hookInput.cwd)) : process.cwd()
-  LOOP_STATE_FILE = resolve(root, '.claude', 'clone-loop.local.md')
-  LOOP_HISTORY_FILE = resolve(root, '.claude', 'clone-loop.history.local.jsonl')
+  LOOP_STATE_FILE = loopStatePath(root)
+  LOOP_HISTORY_FILE = loopHistoryPath(root)
   const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
 
   const validation = validateActiveLoopState({

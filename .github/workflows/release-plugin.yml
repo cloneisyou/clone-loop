@@ -47,7 +47,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/plugin.json .codex-plugin/plugin.json hooks/stop-hook.mjs hooks/ask-user-question-hook.mjs scripts/predict-interview-answer.mjs README.md
+          git add .claude-plugin/plugin.json .codex-plugin/plugin.json README.md
           git commit -m "chore: release ${TAG}"
           git tag -a "$TAG" -m "clone ${VERSION}"
           git push origin HEAD:main "$TAG"

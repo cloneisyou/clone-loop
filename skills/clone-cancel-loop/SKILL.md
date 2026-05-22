@@ -7,11 +7,10 @@ description: Cancel the active Clone Loop in the current workspace.
 
 Use this skill when the user asks to cancel or stop the active Clone Loop.
 
-Check for `.claude/clone-loop.local.md` in the current workspace. If it does not exist, say there is no active Clone Loop. If it exists, read the `iteration:` field, remove the file, and report the cancelled iteration.
+Run the repo-local cancel script from the current workspace:
 
-Use shell commands equivalent to:
-
-```bash
-test -f .claude/clone-loop.local.md && echo EXISTS || echo NOT_FOUND
-rm .claude/clone-loop.local.md
+```sh
+node "${PLUGIN_ROOT}/scripts/cancel-clone-loop.mjs"
 ```
+
+The script checks `.claude/clone-loop.local.md`, removes it if present, records a `loop-cancel` history event, and reports the cancelled iteration.

@@ -107,7 +107,7 @@ To update later: `claude plugin marketplace update clone-labs && claude plugin u
 
 | Command | What it does |
 |---|---|
-| `/clone:interview "<topic>" [options]` | Clarify requirements into a local spec. |
+| `/clone:interview "<topic>" [options]` | Clarify a goal into an executable plan. |
 | `/clone:loop "<task>" [options]` | Start a loop. |
 | `/clone:cancel-loop` | Cancel the active loop. |
 | `/clone:api-key status\|import-env\|set\|clear` | Manage your Clone API key. |
@@ -123,11 +123,16 @@ To update later: `claude plugin marketplace update clone-labs && claude plugin u
   interview answers. Default `0.75`.
 - `--no-auto-answer` — disable Clone-predicted answers and always ask you.
 
-Clone Interview is the requirements side of Clone. It inspects repo facts,
-asks human-judgment questions one at a time, asks Clone MCP to predict how you
-would answer, and only auto-records the answer when confidence clears the
-threshold. Low-confidence questions escalate to you. v1 is plugin-only for
-question generation: Clone does not generate the interview questions yet.
+Clone Interview is the goal-to-plan side of Clone. It inspects repo facts,
+asks the highest-impact unresolved question one at a time, asks Clone MCP to
+predict how you would answer, and only auto-records the answer when confidence
+clears the threshold. Low-confidence questions escalate to you.
+
+The working spec evolves through a Goal Contract, Decision Ledger, Plan Draft,
+Readiness Audit, and Execution Handoff. The interview ends only when the goal,
+scope, decision boundaries, acceptance criteria, tests/checks, and plan risks
+are clear enough to choose a handoff path. v1 is plugin-only for question
+generation: Clone does not generate the interview questions yet.
 
 ### Options for `/clone:loop`
 

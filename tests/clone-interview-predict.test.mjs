@@ -20,7 +20,39 @@ function writeInterviewState(workdir, overrides = {}) {
     agent: 'Claude Code Clone Interview',
     autoAnswer: true,
     outputPath: '.claude/clone-interview.local.md',
-    body: '# Clone Interview\n\n## Topic\n\nAdd billing\n\n## Working Ledger\n\n### Code Facts\n\n- [from-code][auto-confirmed] Node ESM package.',
+    body: `# Clone Interview
+
+## Topic
+
+Add billing
+
+## Working Ledger
+
+### Code Facts
+
+- [from-code][auto-confirmed] Node ESM package.
+
+## Goal Contract
+
+- **Why:** TBD
+- **Desired outcome:** TBD
+
+## Decision Ledger
+
+| Source | Decision | Plan impact |
+|---|---|---|
+| [from-code][auto-confirmed] | Node ESM package | Tests should use node:test. |
+
+## Plan Draft
+
+### Implementation Phases
+
+- TBD
+
+## Readiness Audit
+
+- [ ] One-sentence goal is unambiguous.
+`,
     ...overrides,
   }
   mkdirSync(join(workdir, '.claude'), { recursive: true })
@@ -173,6 +205,9 @@ describe('Clone Interview prediction script', () => {
         assert.equal(output.confidence, 0.91)
         assert.deepEqual(calls.map((call) => call.params?.name || call.method), ['initialize', 'predict_next_prompt', 'submit_feedback'])
         assert.match(calls[1].params.arguments.agent_input, /Current Clone Interview spec/)
+        assert.match(calls[1].params.arguments.agent_input, /Goal Contract/)
+        assert.match(calls[1].params.arguments.agent_input, /Decision Ledger/)
+        assert.match(calls[1].params.arguments.agent_input, /Plan Draft/)
         assert.match(calls[1].params.arguments.agent_input, /Should import support CSV only/)
 
         const history = readFileSync(join(workdir, '.claude', 'clone-interview.history.local.jsonl'), 'utf8')

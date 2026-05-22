@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname } from 'node:path'
+import {
+  DEFAULT_INTERVIEW_OUTPUT_PATH,
+  claudeDir,
+  interviewHistoryPath,
+  interviewStatePath,
+  projectLocalPath as resolveProjectLocalPath,
+} from './clone-paths.mjs'
+import { isPositiveInteger, isThreshold, nowIso, quoteYaml } from './clone-utils.mjs'
 
 const args = process.argv.slice(2)
 const topicParts = []
 let maxQuestions = '12'
 let mode = 'deep'
-let outputPath = '.claude/clone-interview.local.md'
+let outputPath = DEFAULT_INTERVIEW_OUTPUT_PATH
 let cloneThreshold = '0.75'
 let cloneAgent = process.env.CODEX_THREAD_ID ? 'Codex Clone Interview' : 'Claude Code Clone Interview'
 let autoAnswer = true
@@ -46,26 +54,13 @@ function fail(message) {
   process.exit(1)
 }
 
-function quoteYaml(value) {
-  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-}
-
-function isPositiveInteger(value) {
-  return /^[1-9][0-9]*$/.test(String(value || ''))
-}
-
-function isThreshold(value) {
-  return /^(0(\.[0-9]+)?|1(\.0+)?)$/.test(value)
-}
-
 function projectLocalPath(path) {
   const root = process.cwd()
-  const resolved = isAbsolute(path) ? resolve(path) : resolve(root, path)
-  const rel = relative(root, resolved)
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  const localPath = resolveProjectLocalPath(root, path)
+  if (!localPath.isInsideProject) {
     fail(`Error: --output must stay inside the current project. Received: ${path}`)
   }
-  return { resolved, display: rel || '.' }
+  return localPath
 }
 
 for (let index = 0; index < args.length;) {
@@ -141,15 +136,14 @@ if (!topic) {
 }
 
 const root = process.cwd()
-const claudeDir = resolve(root, '.claude')
-mkdirSync(claudeDir, { recursive: true })
+mkdirSync(claudeDir(root), { recursive: true })
 
-const statePath = resolve(claudeDir, 'clone-interview.local.md')
-const historyPath = resolve(claudeDir, 'clone-interview.history.local.jsonl')
+const statePath = interviewStatePath(root)
+const historyPath = interviewHistoryPath(root)
 const output = projectLocalPath(outputPath)
 mkdirSync(dirname(output.resolved), { recursive: true })
 
-const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+const startedAt = nowIso()
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID || ''
 const spec = `---
 active: true
@@ -179,31 +173,89 @@ ${topic}
 
 ### User Decisions
 
-- (Record explicit user decisions here.)
+- (Record explicit user decisions here as \`[from-user] ...\`.)
 
-### Scope
+### Clone Predictions
 
-- (Record in-scope behavior here.)
+- (Record high-confidence Clone answers as \`[from-clone][auto] ...\`.)
+- (Record low-confidence suggestions as \`[from-clone][escalated] ...\` before asking the user.)
 
-### Non-Goals
+## Goal Contract
 
-- (Record out-of-scope behavior here.)
+### Why
+
+- (Why this goal matters to the user or business.)
+
+### Desired Outcome
+
+- (The concrete end state the user wants.)
+
+### Target User
+
+- (Who the work is for.)
+
+### In Scope
+
+- (Behaviors, surfaces, or deliverables this plan should include.)
+
+### Out of Scope
+
+- (Explicit non-goals and deferred work.)
+
+### Decision Boundaries
+
+- (What the agent may decide without confirmation, and what must go back to the user.)
 
 ### Constraints
 
-- (Record technical, product, timeline, privacy, and compatibility constraints here.)
+- (Technical, product, timeline, privacy, compatibility, or launch constraints.)
 
 ### Acceptance Criteria
 
-- (Record observable completion criteria here.)
+- [ ] (Observable, testable completion criterion.)
 
-### Verification
+## Decision Ledger
+
+| Source | Decision | Plan Impact |
+| --- | --- | --- |
+| \`[from-code][auto-confirmed]\` | (descriptive repo fact) | (how it shapes the plan) |
+| \`[from-user]\` | (user decision) | (how it changes scope, tests, or implementation) |
+| \`[from-clone][auto]\` | (Clone-predicted answer accepted above threshold) | (how it changes the plan draft) |
+| \`[from-clone][escalated]\` | (low-confidence suggestion) | (question asked to the user before relying on it) |
+
+## Plan Draft
+
+### Implementation Phases
+
+1. (Phase name and goal.)
+
+### Likely Touched Areas
+
+- (Files, directories, modules, commands, docs, or config likely affected.)
+
+### Required Tests / Checks
 
 - (Record required tests, checks, demos, or review gates here.)
 
-### Restated Goal
+### Risks and Unknowns
 
-- (Before closing, restate the final one-sentence goal and get user confirmation.)
+- (Risks, unclear decisions, or assumptions that could change execution.)
+
+### Acceptance Checklist
+
+- [ ] (Checklist item tied to the acceptance criteria.)
+
+## Readiness Audit
+
+- [ ] One-sentence goal is unambiguous.
+- [ ] In-scope and out-of-scope are separated.
+- [ ] Acceptance criteria are observable or testable.
+- [ ] Product/business decisions are resolved or listed as open questions.
+- [ ] Plan Draft includes phase, likely touched areas, tests/checks, and risks.
+
+## Execution Handoff
+
+- (After the Readiness Audit passes, ask the user to choose: Refine plan, Start Clone Loop with this plan, Implement manually from this plan, or Stop here.)
 
 ## Interview Operating Rules
 
@@ -211,11 +263,12 @@ ${topic}
 - Auto-confirm only exact repo facts, and mark them with \`[from-code][auto-confirmed]\`.
 - Before asking human-judgment questions, ask Clone to predict the user's answer when \`auto_answer\` is true.
 - Use Clone-predicted answers only when confidence is greater than or equal to \`clone_threshold\`; otherwise escalate to the user.
-- Ask the user for goals, scope, acceptance criteria, product tradeoffs, business logic, and non-goals.
-- Ask one question at a time.
-- Structure free-form answers that carry scope or constraints, then confirm nothing was lost before treating them as final.
-- In \`quick\` mode, close goal, output, and acceptance criteria.
-- In \`deep\` mode, close goal, audience, constraints, outputs, acceptance criteria, non-goals, and verification.
+- Ask the highest-impact unresolved question in this order: goal, outcome, scope/non-goals, decision boundaries, constraints, acceptance criteria, plan risks.
+- Ask one question at a time using this frame: Current understanding, Blocked decision, Clone predicted answer or escalation, Question, Plan impact.
+- Update the Goal Contract, Decision Ledger, Plan Draft, and Readiness Audit after every answer, including Clone auto-answers.
+- In \`quick\` mode, close goal, outcome, scope, acceptance criteria, and a minimal Plan Draft.
+- In \`deep\` mode, close goal, audience, decision boundaries, constraints, non-goals, acceptance criteria, risks, and Execution Handoff.
+- Before closing, run the Readiness Audit. If any item fails, ask the single question that would most improve the plan.
 `
 
 writeFileSync(statePath, spec)
