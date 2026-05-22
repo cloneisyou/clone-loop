@@ -1,0 +1,20 @@
+{
+  "name": "clone-loop",
+  "interface": {
+    "displayName": "Clone Loop"
+  },
+  "plugins": [
+    {
+      "name": "clone-loop",
+      "source": {
+        "source": "local",
+        "path": "../.."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

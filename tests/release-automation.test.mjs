@@ -15,7 +15,7 @@ function writeFixture(rootDir, path, contents) {
 }
 
 describe('release automation', () => {
-  it('bumps plugin version across manifest and hook clients', () => {
+  it('bumps plugin version across manifests and hook clients', () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'clone-release-fixture-'))
 
     try {
@@ -24,22 +24,36 @@ describe('release automation', () => {
         '.claude-plugin/plugin.json',
         JSON.stringify({ name: 'clone', version: '0.2.7', description: 'Clone' }, null, 2),
       )
+      writeFixture(
+        fixtureRoot,
+        '.codex-plugin/plugin.json',
+        JSON.stringify({ name: 'clone-loop', version: '0.2.7', description: 'Clone Loop' }, null, 2),
+      )
       writeFixture(fixtureRoot, 'hooks/stop-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
       writeFixture(fixtureRoot, 'hooks/ask-user-question-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
 
       const result = spawnSync(
         process.execPath,
-        [join(root, 'scripts/bump-plugin-version.mjs'), '--root', fixtureRoot, '--part', 'minor'],
+        [join(root, 'scripts/bump-plugin-version.mjs'), '--root', fixtureRoot, '--part', 'patch'],
         { encoding: 'utf8' },
       )
 
       assert.equal(result.status, 0, result.stderr || result.stdout)
-      assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.claude-plugin/plugin.json'), 'utf8')).version, '0.3.0')
-      assert.match(readFileSync(join(fixtureRoot, 'hooks/stop-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.3\.0'/)
-      assert.match(readFileSync(join(fixtureRoot, 'hooks/ask-user-question-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.3\.0'/)
-      assert.match(result.stdout, /0\.2\.7 -> 0\.3\.0/)
+      assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.claude-plugin/plugin.json'), 'utf8')).version, '0.2.8')
+      assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.codex-plugin/plugin.json'), 'utf8')).version, '0.2.8')
+      assert.match(readFileSync(join(fixtureRoot, 'hooks/stop-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
+      assert.match(readFileSync(join(fixtureRoot, 'hooks/ask-user-question-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
+      assert.match(result.stdout, /0\.2\.7 -> 0\.2\.8/)
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true })
     }
+  })
+
+  it('creates patch releases and commits both plugin manifests', () => {
+    const workflow = readFileSync(join(root, '.github', 'workflows', 'release-plugin.yml'), 'utf8')
+
+    assert.match(workflow, /Bump patch version/)
+    assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
+    assert.match(workflow, /git add .*\.claude-plugin\/plugin\.json .*\.codex-plugin\/plugin\.json/)
   })
 })

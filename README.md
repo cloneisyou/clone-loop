@@ -207,6 +207,16 @@ claude --plugin-dir .
 
 Tags: see [Releases](https://github.com/cloneisyou/clone-loop/releases).
 
+## Codex plugin
+
+This repo also publishes a Codex plugin manifest:
+
+- `.codex-plugin/plugin.json` declares the `clone-loop` Codex plugin.
+- `.agents/plugins/marketplace.json` exposes it through the repo-local
+  `clone-loop` marketplace.
+- `.mcp.json` is shared so Codex can connect to Clone MCP with
+  `CLONE_API_TOKEN` or the public demo fallback.
+
 ## Requirements
 
 Claude Code with plugin support, Node.js on `PATH`. Windows: PowerShell

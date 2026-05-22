@@ -29,8 +29,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Bump minor version
-        run: node scripts/bump-plugin-version.mjs --part minor
+      - name: Bump patch version
+        run: node scripts/bump-plugin-version.mjs --part patch
 
       - name: Test release candidate
         run: npm test
@@ -47,7 +47,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/plugin.json hooks/stop-hook.mjs hooks/ask-user-question-hook.mjs README.md
+          git add .claude-plugin/plugin.json .codex-plugin/plugin.json hooks/stop-hook.mjs hooks/ask-user-question-hook.mjs README.md
           git commit -m "chore: release ${TAG}"
           git tag -a "$TAG" -m "$TAG"
           git push origin HEAD:main "$TAG"

@@ -1,0 +1,39 @@
+{
+  "name": "clone-loop",
+  "version": "0.14.0",
+  "description": "Clone Loop keeps coding agents working with confidence-gated predicted next prompts from Clone MCP.",
+  "author": {
+    "name": "Clone",
+    "email": "hello@clone.is",
+    "url": "https://clone.is"
+  },
+  "homepage": "https://github.com/cloneisyou/clone-loop#readme",
+  "repository": "https://github.com/cloneisyou/clone-loop",
+  "license": "Apache-2.0",
+  "keywords": [
+    "clone",
+    "clone-loop",
+    "mcp",
+    "agent",
+    "automation"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Clone Loop",
+    "shortDescription": "Keep Agent working with predicted next prompts.",
+    "longDescription": "Clone Loop connects agents to Clone MCP so iterative coding sessions can continue with contextual, confidence-gated next-prompt predictions.",
+    "developerName": "Clone",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "MCP"
+    ],
+    "websiteURL": "https://clone.is/you",
+    "defaultPrompt": [
+      "Predict the next prompt for this coding session.",
+      "Help me keep this task moving until tests pass.",
+      "Use Clone MCP context to suggest the next step."
+    ],
+    "brandColor": "#6F42C1"
+  }
+}

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/
@@ -100,6 +100,10 @@ if (nextVersion === previousVersion) {
 }
 
 updateJsonVersion(manifestPath, nextVersion)
+const codexManifestPath = join(options.root, '.codex-plugin', 'plugin.json')
+if (existsSync(codexManifestPath)) {
+  updateJsonVersion(codexManifestPath, nextVersion)
+}
 updateClientVersion(join(options.root, 'hooks', 'stop-hook.mjs'), nextVersion)
 updateClientVersion(join(options.root, 'hooks', 'ask-user-question-hook.mjs'), nextVersion)
 
