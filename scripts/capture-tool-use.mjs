@@ -3,8 +3,8 @@
 import { appendLoopHistory, validateActiveLoopState } from './loop-state-guard.mjs'
 import { resolve } from 'node:path'
 
-const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
-const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
+let LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
+let LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const CAP = 240
 
 function readStdin() {
@@ -37,6 +37,7 @@ function extractFilePath(toolInput) {
   if (!toolInput || typeof toolInput !== 'object') return ''
   if (toolInput.file_path) return stringValue(toolInput.file_path)
   if (toolInput.path) return stringValue(toolInput.path)
+  if (toolInput.patch) return extractApplyPatchPaths(toolInput.patch).join(', ')
   if (Array.isArray(toolInput.edits)) {
     const paths = toolInput.edits
       .map((edit) => stringValue(edit?.file_path || edit?.path))
@@ -44,6 +45,15 @@ function extractFilePath(toolInput) {
     return [...new Set(paths)].join(', ')
   }
   return ''
+}
+
+function extractApplyPatchPaths(patch) {
+  const paths = []
+  for (const line of String(patch || '').split(/\r?\n/)) {
+    const match = line.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/)
+    if (match) paths.push(match[1].trim())
+  }
+  return [...new Set(paths.filter(Boolean))]
 }
 
 function extractSuccess(toolResponse) {
@@ -69,6 +79,9 @@ function appendHistory(record) {
 
 async function main() {
   const hookInput = parseJson(await readStdin())
+  const root = hookInput.cwd ? resolve(String(hookInput.cwd)) : process.cwd()
+  LOOP_STATE_FILE = resolve(root, '.claude', 'clone-loop.local.md')
+  LOOP_HISTORY_FILE = resolve(root, '.claude', 'clone-loop.history.local.jsonl')
   const hookSession = hookInput.session_id ? stringValue(hookInput.session_id) : ''
   const validation = validateActiveLoopState({
     statePath: LOOP_STATE_FILE,
@@ -80,7 +93,7 @@ async function main() {
   const { state } = validation
 
   const toolName = stringValue(hookInput.tool_name || hookInput.toolName)
-  if (!/^(Write|Edit|MultiEdit)$/.test(toolName)) return
+  if (!/^(Write|Edit|MultiEdit|apply_patch)$/.test(toolName)) return
 
   const toolInput = hookInput.tool_input && typeof hookInput.tool_input === 'object'
     ? hookInput.tool_input

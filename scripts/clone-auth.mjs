@@ -10,12 +10,14 @@ export function defaultPluginDataDir() {
 }
 
 export function pluginDataDir(env = process.env) {
+  const codexValue = String(env.PLUGIN_DATA || '').trim()
+  if (codexValue) return codexValue
   const value = String(env.CLAUDE_PLUGIN_DATA || '').trim()
   return value || defaultPluginDataDir()
 }
 
 export function isPluginDataDirInjected(env = process.env) {
-  return Boolean(String(env.CLAUDE_PLUGIN_DATA || '').trim())
+  return Boolean(String(env.PLUGIN_DATA || env.CLAUDE_PLUGIN_DATA || '').trim())
 }
 
 export function authFilePath(env = process.env) {

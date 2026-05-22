@@ -7,7 +7,7 @@ const args = process.argv.slice(2)
 const promptParts = []
 let maxIterations = '0'
 let cloneThreshold = '0.6'
-let cloneAgent = 'Claude Code Clone Loop'
+let cloneAgent = process.env.CODEX_THREAD_ID ? 'Codex Clone Loop' : 'Claude Code Clone Loop'
 const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
@@ -118,6 +118,7 @@ if (!prompt) {
   fail('Error: No prompt provided.\nExample: /clone:loop Build a REST API for todos --max-iterations 20')
 }
 
+const sessionId = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID || ''
 const claudeDir = join(process.cwd(), '.claude')
 mkdirSync(claudeDir, { recursive: true })
 
@@ -125,7 +126,7 @@ const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 const state = `---
 active: true
 iteration: 1
-session_id: ${process.env.CLAUDE_CODE_SESSION_ID || ''}
+session_id: ${sessionId}
 max_iterations: ${maxIterations}
 clone_threshold: ${cloneThreshold}
 clone_agent: ${quoteYaml(cloneAgent)}
@@ -143,7 +144,7 @@ try {
     `${JSON.stringify({
       ts: startedAt,
       event: 'loop-start',
-      session_id: process.env.CLAUDE_CODE_SESSION_ID || '',
+      session_id: sessionId,
       max_iterations: Number(maxIterations),
       clone_threshold: Number(cloneThreshold),
       clone_agent: cloneAgent,

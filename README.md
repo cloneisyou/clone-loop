@@ -220,13 +220,34 @@ Tags: see [Releases](https://github.com/cloneisyou/clone-loop/releases).
 
 ## Codex plugin
 
-This repo also publishes a Codex plugin manifest:
+This repo also publishes a Codex plugin with skills, hooks, and Clone MCP
+configuration:
 
 - `.codex-plugin/plugin.json` declares the `clone-loop` Codex plugin.
 - `.agents/plugins/marketplace.json` exposes it through the repo-local
   `clone-loop` marketplace.
 - `.mcp.json` is shared so Codex can connect to Clone MCP with
-  `CLONE_API_TOKEN` or the public demo fallback.
+  `CLONE_API_TOKEN`.
+- `hooks/codex-hooks.json` runs the Codex Stop hook that injects confident
+  Clone-predicted next prompts.
+
+First run `clone-setup` in Codex. It enables `[features].plugin_hooks = true`
+in `~/.codex/config.toml`, reports the effective Clone API key source, and
+leaves a one-time `config.toml.clone-loop.bak` backup before changing an
+existing config.
+
+Then start a loop:
+
+```text
+clone-loop "Run tests and fix any failures" --max-iterations 5
+```
+
+Codex plugin hooks require trust review. If Codex warns about untrusted hooks,
+open `/hooks`, trust the Clone Loop plugin hooks, and retry.
+
+Codex v1 reproduces the Stop-hook loop behavior. Claude's AskUserQuestion
+auto-answer hook is not available in Codex v1 because Codex does not expose an
+equivalent AskUserQuestion tool hook event.
 
 ## Requirements
 

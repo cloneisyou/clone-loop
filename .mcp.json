@@ -1,9 +1,9 @@
 {
-  "mcpServers": {
+  "mcp_servers": {
     "clone": {
       "url": "https://api.clone.is/mcp",
-      "headers": {
-        "X-Clone-API-Key": "${CLONE_API_TOKEN:-clone_yc-reviewer-public-demo-2026}"
+      "env_http_headers": {
+        "X-Clone-API-Key": "CLONE_API_TOKEN"
       }
     }
   }

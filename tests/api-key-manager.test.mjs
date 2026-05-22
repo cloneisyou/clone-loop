@@ -83,4 +83,21 @@ describe('Clone API key manager', () => {
       assert.match(result.stdout, /Cleared plugin config API key/)
     })
   })
+
+  it('stores plugin config under Codex PLUGIN_DATA when injected', () => {
+    const pluginDataDir = mkdtempSync(join(tmpdir(), 'clone-codex-plugin-data-'))
+
+    try {
+      const token = 'clone_codex_saved_token_1234567890'
+      const result = runManager(['set', token], {
+        env: { PLUGIN_DATA: pluginDataDir },
+      })
+
+      assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+      const saved = JSON.parse(readFileSync(join(pluginDataDir, 'auth.local.json'), 'utf8'))
+      assert.equal(saved.clone_api_token, token)
+    } finally {
+      rmSync(pluginDataDir, { recursive: true, force: true })
+    }
+  })
 })

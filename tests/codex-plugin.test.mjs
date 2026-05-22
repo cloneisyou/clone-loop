@@ -18,10 +18,22 @@ describe('Codex plugin manifest', () => {
     assert.equal(manifest.version, readJson('.claude-plugin/plugin.json').version)
     assert.equal(manifest.repository, 'https://github.com/cloneisyou/clone-loop')
     assert.equal(manifest.license, 'Apache-2.0')
+    assert.equal(manifest.skills, './skills/')
+    assert.equal(manifest.hooks, './hooks/codex-hooks.json')
     assert.equal(manifest.mcpServers, './.mcp.json')
     assert.equal(manifest.interface.displayName, 'Clone Loop')
     assert.match(manifest.interface.shortDescription, /predicted next prompts/i)
+    assert.deepEqual(manifest.interface.capabilities, ['Hooks', 'Skills', 'MCP'])
     assert.ok(manifest.interface.defaultPrompt.length <= 3)
+  })
+
+  it('bundles Clone MCP using Codex documented HTTP header config', () => {
+    const mcp = readJson('.mcp.json')
+
+    assert.equal(mcp.mcp_servers.clone.url, 'https://api.clone.is/mcp')
+    assert.deepEqual(mcp.mcp_servers.clone.env_http_headers, {
+      'X-Clone-API-Key': 'CLONE_API_TOKEN',
+    })
   })
 
   it('registers a repo-local Codex marketplace entry named clone-loop', () => {

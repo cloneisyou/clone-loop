@@ -24,7 +24,7 @@ USAGE:
 
 TOKEN PRIORITY:
   1. CLONE_API_TOKEN environment variable
-  2. Plugin config in CLAUDE_PLUGIN_DATA/auth.local.json
+  2. Plugin config in PLUGIN_DATA/auth.local.json or CLAUDE_PLUGIN_DATA/auth.local.json
   3. Public demo fallback token`)
 }
 
@@ -43,7 +43,7 @@ function printResolvedToken(prefix = '') {
   if (injected) {
     console.log(`Plugin config: ${authFilePath()}`)
   } else {
-    console.log(`Plugin config: ${authFilePath()} (fallback path — CLAUDE_PLUGIN_DATA not injected)`)
+    console.log(`Plugin config: ${authFilePath()} (fallback path — PLUGIN_DATA/CLAUDE_PLUGIN_DATA not injected)`)
   }
 
   if (resolved.isDemo) {
@@ -64,7 +64,7 @@ if (command === 'status') {
 if (command === 'import-env') {
   if (args.length !== 1) fail('Usage: /clone:api-key import-env')
   const token = String(process.env.CLONE_API_TOKEN || '').trim()
-  if (!token) fail('CLONE_API_TOKEN is not set in this Claude Code process.')
+  if (!token) fail('CLONE_API_TOKEN is not set in this agent process.')
 
   writePluginConfigToken(token)
   console.log('Stored Clone API key from CLONE_API_TOKEN.')
