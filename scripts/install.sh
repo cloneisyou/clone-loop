@@ -27,26 +27,13 @@ fi
 
 echo
 if command -v gh >/dev/null 2>&1; then
-  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
-    printf "Star %s on GitHub now? [Y/n] " "${GITHUB_REPO}" > /dev/tty
-    read -r STAR_REPLY < /dev/tty || STAR_REPLY=""
-    case "${STAR_REPLY:-Y}" in
-      n|N|no|NO|No)
-        echo "Skipping GitHub star."
-        ;;
-      *)
-        if gh repo star "${GITHUB_REPO}" >/dev/null 2>&1; then
-          echo "Starred ${GITHUB_REPO}."
-        else
-          echo "Could not star automatically. Check GitHub CLI authentication with: gh auth status"
-        fi
-        ;;
-    esac
+  if gh repo star "${GITHUB_REPO}" >/dev/null 2>&1; then
+    echo "Starred ${GITHUB_REPO}."
   else
-    echo "Skipping GitHub star prompt because no interactive terminal is available."
+    echo "Could not star automatically. Check GitHub CLI authentication with: gh auth status"
   fi
 else
-  echo "Skipping GitHub star prompt because GitHub CLI is not installed."
+  echo "Skipping GitHub star because GitHub CLI is not installed."
 fi
 
 cat <<'NEXT'

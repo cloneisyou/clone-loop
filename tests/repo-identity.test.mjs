@@ -63,8 +63,9 @@ describe('repository identity', () => {
     const installer = readFileSync(join(root, 'scripts', 'install.sh'), 'utf8')
 
     assert.match(installer, /GITHUB_REPO="cloneisyou\/clone-loop"/)
-    assert.match(installer, /read -r STAR_REPLY < \/dev\/tty/)
     assert.match(installer, /gh repo star "\$\{GITHUB_REPO\}"/)
+    assert.doesNotMatch(installer, /Star .* now\?/)
+    assert.doesNotMatch(installer, /STAR_REPLY/)
     assert.doesNotMatch(installer, /echo "  gh repo star/)
   })
 })
