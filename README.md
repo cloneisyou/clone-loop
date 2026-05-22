@@ -13,10 +13,18 @@
   <a href="https://github.com/cloneisyou/clone-loop/tags">
     <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-loop?filter=clone-plugin-v*&label=version" alt="Version">
   </a>
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/Codex-plugin-111827" alt="Codex plugin">
-  <img src="https://img.shields.io/badge/Clone%20MCP-next--prompt-0ea5e9" alt="Clone MCP">
-  <img src="https://img.shields.io/github/license/cloneisyou/clone-loop?color=green" alt="License">
+  <a href="#quick-start">
+    <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
+  </a>
+  <a href="#codex-plugin">
+    <img src="https://img.shields.io/badge/Codex-plugin-111827" alt="Codex plugin">
+  </a>
+  <a href="https://clone.is/you">
+    <img src="https://img.shields.io/badge/Clone%20MCP-next--prompt-0ea5e9" alt="Clone MCP">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/cloneisyou/clone-loop?color=green" alt="License">
+  </a>
 </p>
 
 <p align="center">
