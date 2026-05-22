@@ -154,7 +154,9 @@ describe('Clone Loop setup script', () => {
           assert.match(state, /clone_session_id: "clone-session-setup"/)
           assert.match(state, /mcp_session_id: "mcp-session-setup"/)
           assert.match(state, /last_prompt_event_id: "prompt-event-setup"/)
-          assert.equal(calls.some((call) => call.params?.name === 'start_session'), true)
+          const startCall = calls.find((call) => call.params?.name === 'start_session')
+          assert.ok(startCall)
+          assert.equal(startCall.params.arguments.source_detail, 'clone:loop')
           assert.equal(calls.some((call) => call.params?.name === 'record_agent_prompt'), true)
         },
         { sessionId: 'mcp-session-setup' },

@@ -6,7 +6,7 @@
   <br/><br/>
   <strong>Keep Agent working, with predicted next prompts.</strong>
   <br/>
-  <sub>A Claude Code plugin for self-driving coding loops powered by Clone MCP.</sub>
+  <sub>An agent plugin for self-driving coding loops powered by Clone MCP.</sub>
 </p>
 
 <p align="center">
@@ -35,9 +35,9 @@
   <a href="#pinning-a-version">Versions</a>
 </p>
 
-Clone is a Claude Code plugin that turns any task into a self-driving loop.
-When Claude tries to stop, Clone predicts your most likely next prompt and
-hands it back to Claude so the work continues — without you having to type
+Clone Loop turns any agent task into a self-driving loop for Claude Code and
+Codex. When the agent tries to stop, Clone predicts your most likely next prompt
+and hands it back so the work continues — without you having to type
 the same nudge ten times.
 
 ```text
@@ -53,9 +53,9 @@ Then walk away.
   you. Threshold-gated so it only auto-continues when it's confident.
 - **Rich context, not a one-line snapshot.** Each prediction sees your
   original task, every prior iteration's user turn, and a full timeline of
-  what Claude did this iteration — text, tool calls, and tool results.
-- **AskUserQuestion popups answered automatically** during an active loop.
-- **One session, one Claude.** No subprocesses, no daemons, no parallel
+  what the agent did this iteration — text, tool calls, and tool results.
+- **AskUserQuestion popups answered automatically in Claude Code** during an active loop.
+- **One session, one agent.** No subprocesses, no daemons, no parallel
   agents to herd.
 
 ## Quick start
@@ -144,14 +144,14 @@ generation: Clone does not generate the interview questions yet.
 
 ## How it works
 
-1. `/clone:loop` writes a state file and Claude starts the task.
-2. When Claude tries to stop, the Stop hook intercepts.
+1. `/clone:loop` or `clone-loop` writes a state file and the agent starts the task.
+2. When the agent tries to stop, the Stop hook intercepts.
 3. The hook asks Clone MCP `predict_next_prompt` for what you'd most likely
    say next.
-4. **Above threshold** → prediction injected, Claude continues.
+4. **Above threshold** → prediction injected, the agent continues.
    **Above threshold + satisfaction signal** → loop exits, asks for input.
    **Below threshold** → loop exits, asks for input.
-5. Mid-loop `AskUserQuestion` popups are auto-answered the same way.
+5. In Claude Code, mid-loop `AskUserQuestion` popups are auto-answered the same way.
 
 ### What Clone actually sees
 
@@ -159,7 +159,7 @@ generation: Clone does not generate the interview questions yet.
 - **The conversation so far** — every prior iteration's injected user turn
   plus the assistant timeline that produced it (text + tool calls +
   summarized tool results).
-- **What Claude just did** — this iteration's full timeline.
+- **What the agent just did** — this iteration's full timeline.
 
 Sane caps: 20-turn rolling window on user history, oldest prior-iter
 timelines drop first when the combined size exceeds budget, and long tool
@@ -287,8 +287,8 @@ equivalent AskUserQuestion tool hook event.
 
 ## Requirements
 
-Claude Code with plugin support, Node.js on `PATH`. Windows: PowerShell
-or cmd, no Git Bash needed.
+Claude Code or Codex with plugin support, plus Node.js on `PATH`. Windows:
+PowerShell or cmd, no Git Bash needed.
 
 ## Development
 

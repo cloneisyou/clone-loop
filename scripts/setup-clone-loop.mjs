@@ -24,7 +24,7 @@ ARGUMENTS:
 OPTIONS:
   --max-iterations <n>       Maximum iterations before auto-stop (default: unlimited)
   --clone-threshold <n>      Clone auto/escalation threshold in [0, 1] (default: 0.6)
-  --clone-agent '<text>'     Agent label sent to Clone (default: Claude Code Clone Loop)
+  --clone-agent '<text>'     Agent label sent to Clone (default: current runtime Clone Loop)
   -h, --help                 Show this help message
 
 DESCRIPTION:
@@ -131,7 +131,7 @@ async function bootstrapCloneSession() {
   if (String(process.env.CLONE_LOOP_DISABLE_SESSION || '').trim() === '1') return
   try {
     const { cloneSessionId, mcpSessionId } = await startCloneSession({
-      sourceDetail: 'clone-loop:setup',
+      sourceDetail: 'clone:loop',
     })
     const recorded = await recordAgentPrompt({
       cloneSessionId,
@@ -179,7 +179,7 @@ Max iterations: ${Number(maxIterations) > 0 ? maxIterations : 'unlimited'}
 Clone threshold: ${cloneThreshold}
 Clone agent: ${cloneAgent}
 
-The stop hook is active. On each stop, Claude will ask Clone MCP to predict
+The stop hook is active. On each stop, the agent will ask Clone MCP to predict
 the next user prompt and continue only when confidence clears the threshold.
 
 To monitor: head -10 .claude/clone-loop.local.md`)
