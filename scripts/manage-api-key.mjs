@@ -9,9 +9,14 @@ import {
   resolveCloneToken,
   writePluginConfigToken,
 } from './clone-auth.mjs'
+import { cloneMcpClientInfo, cloneMcpEndpoint, cloneMcpRpc } from './clone-mcp-client.mjs'
 
 const args = process.argv.slice(2)
-const command = args[0] || 'status'
+const positionalArgs = args.filter((arg) => arg !== '--connect')
+const connectAfterStore = args.includes('--connect')
+const command = positionalArgs[0] || 'status'
+const CLONE_LOOP_SOURCE_DETAIL = 'clone-loop:claude-code'
+let handled = false
 
 function usage() {
   console.log(`Clone API key manager
@@ -19,7 +24,10 @@ function usage() {
 USAGE:
   /clone:api-key status
   /clone:api-key import-env
+  /clone:api-key import-env --connect
   /clone:api-key set <key>
+  /clone:api-key set <key> --connect
+  /clone:api-key connect
   /clone:api-key clear
 
 TOKEN PRIORITY:
@@ -31,6 +39,70 @@ TOKEN PRIORITY:
 function fail(message) {
   console.error(message)
   process.exit(1)
+}
+
+function parseToolBody(payload, toolName) {
+  const content = payload?.result?.content?.[0]
+  if (payload?.result?.isError) {
+    throw new Error(`${toolName} returned an error: ${content?.text || 'unknown MCP tool error'}`)
+  }
+  if (content?.type !== 'text' || !content.text) {
+    throw new Error(`${toolName} returned an empty response`)
+  }
+
+  try {
+    return JSON.parse(content.text)
+  } catch {
+    throw new Error(`${toolName} returned non-JSON response: ${content.text}`)
+  }
+}
+
+function dashboardSessionUrl(sessionId) {
+  const base = String(process.env.CLONE_DASHBOARD_URL || 'https://clone.is').replace(/\/+$/, '')
+  return `${base}/console?session=${encodeURIComponent(sessionId)}#sources`
+}
+
+async function startDashboardSession(token) {
+  const endpoint = cloneMcpEndpoint()
+  const init = await cloneMcpRpc(endpoint, token, 'initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: cloneMcpClientInfo(),
+  })
+  if (!init.sessionId) throw new Error('MCP initialize did not return an mcp-session-id header.')
+
+  const started = await cloneMcpRpc(
+    endpoint,
+    token,
+    'tools/call',
+    {
+      name: 'start_session',
+      arguments: {
+        source: 'agent',
+        source_detail: CLONE_LOOP_SOURCE_DETAIL,
+      },
+    },
+    init.sessionId,
+  )
+  const body = parseToolBody(started.payload, 'start_session')
+  const cloneSessionId = body.session_id || body.sessionId
+  if (!cloneSessionId) throw new Error('start_session did not return a Clone session id.')
+  return cloneSessionId
+}
+
+async function connectToDashboard() {
+  const resolved = resolveCloneToken()
+  if (resolved.isDemo) {
+    fail('Private Clone API key is required. Create a key in Clone Dashboard, then run /clone:api-key import-env --connect or /clone:api-key set <key> --connect.')
+  }
+
+  console.log('Connecting Clone Loop to Clone Dashboard via MCP...')
+  console.log(`Source: ${resolved.source}`)
+  console.log(`Token: ${resolved.masked}`)
+  const sessionId = await startDashboardSession(resolved.token)
+  console.log('Connected Clone Loop to Clone Dashboard.')
+  console.log(`Clone session: ${sessionId}`)
+  console.log(`Dashboard: ${dashboardSessionUrl(sessionId)}`)
 }
 
 function printResolvedToken(prefix = '') {
@@ -57,12 +129,15 @@ if (command === '-h' || command === '--help' || command === 'help') {
 }
 
 if (command === 'status') {
+  if (connectAfterStore) fail('Usage: /clone:api-key status')
+  if (args.length !== 1 && args.length !== 0) fail('Usage: /clone:api-key status')
   printResolvedToken()
   process.exit(0)
 }
 
 if (command === 'import-env') {
-  if (args.length !== 1) fail('Usage: /clone:api-key import-env')
+  handled = true
+  if (positionalArgs.length !== 1) fail('Usage: /clone:api-key import-env [--connect]')
   const token = String(process.env.CLONE_API_TOKEN || '').trim()
   if (!token) fail('CLONE_API_TOKEN is not set in this agent process.')
 
@@ -70,21 +145,48 @@ if (command === 'import-env') {
   console.log('Stored Clone API key from CLONE_API_TOKEN.')
   console.log(`Token: ${maskToken(token)}`)
   console.log(`Plugin config: ${authFilePath()}`)
-  process.exit(0)
+  if (connectAfterStore) {
+    try {
+      await connectToDashboard()
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err))
+    }
+  } else {
+    process.exit(0)
+  }
 }
 
 if (command === 'set') {
-  if (args.length !== 2 || !String(args[1] || '').trim()) {
-    fail('Usage: /clone:api-key set <key>')
+  handled = true
+  if (positionalArgs.length !== 2 || !String(positionalArgs[1] || '').trim()) {
+    fail('Usage: /clone:api-key set <key> [--connect]')
   }
 
-  const token = String(args[1]).trim()
+  const token = String(positionalArgs[1]).trim()
   writePluginConfigToken(token)
   console.log('Stored Clone API key in plugin config.')
   console.log(`Token: ${maskToken(token)}`)
   console.log(`Plugin config: ${authFilePath()}`)
   console.log('Prefer import-env when possible because direct slash-command arguments may remain in the transcript.')
-  process.exit(0)
+  if (connectAfterStore) {
+    try {
+      await connectToDashboard()
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err))
+    }
+  } else {
+    process.exit(0)
+  }
+}
+
+if (command === 'connect') {
+  handled = true
+  if (positionalArgs.length !== 1) fail('Usage: /clone:api-key connect')
+  try {
+    await connectToDashboard()
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err))
+  }
 }
 
 if (command === 'clear') {
@@ -95,4 +197,4 @@ if (command === 'clear') {
   process.exit(0)
 }
 
-fail(`Unknown /clone:api-key command: ${command}`)
+if (!handled) fail(`Unknown /clone:api-key command: ${command}`)
