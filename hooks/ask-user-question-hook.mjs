@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { loopHistoryPath, loopStatePath } from '../scripts/clone-paths.mjs'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 import {
