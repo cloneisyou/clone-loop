@@ -1,10 +1,10 @@
 {
-  "name": "clone-labs",
+  "name": "clone-loop",
   "metadata": {
-    "description": "Clone Labs Claude Code plugins."
+    "description": "Clone Loop Claude Code plugins."
   },
   "owner": {
-    "name": "Clone Labs"
+    "name": "Clone"
   },
   "plugins": [
     {

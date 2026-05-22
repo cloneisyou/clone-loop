@@ -14,13 +14,13 @@ fi
 echo "Installing Clone with ${CLAUDE_BIN}..."
 
 if ! "${CLAUDE_BIN}" plugin marketplace add cloneisyou/clone-loop@main; then
-  echo "Marketplace add did not complete; refreshing clone-labs if it already exists."
-  "${CLAUDE_BIN}" plugin marketplace update clone-labs || true
+  echo "Marketplace add did not complete; refreshing clone-loop if it already exists."
+  "${CLAUDE_BIN}" plugin marketplace update clone-loop || true
 fi
 
-if ! "${CLAUDE_BIN}" plugin install clone@clone-labs --scope user; then
+if ! "${CLAUDE_BIN}" plugin install clone@clone-loop --scope user; then
   echo "Install did not complete; trying plugin update for an existing install."
-  "${CLAUDE_BIN}" plugin update clone@clone-labs
+  "${CLAUDE_BIN}" plugin update clone@clone-loop
 fi
 
 cat <<'NEXT'

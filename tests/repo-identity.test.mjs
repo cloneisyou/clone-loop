@@ -9,6 +9,7 @@ const ignoredDirs = new Set(['.git', '.claude', '.codex', 'node_modules'])
 const oldSlug = ['clone', 'claude', 'plugin'].join('-')
 const oldRepo = `cloneisyou/${oldSlug}`
 const oldRawRepo = ['raw.githubusercontent.com', 'cloneisyou', oldSlug].join('/')
+const oldMarketplace = ['clone', 'labs'].join('-')
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -38,6 +39,14 @@ describe('repository identity', () => {
     assert.match(haystack, /cloneisyou\/clone-loop/)
     assert.doesNotMatch(haystack, new RegExp(escapeRegExp(oldRepo)))
     assert.doesNotMatch(haystack, new RegExp(escapeRegExp(oldRawRepo)))
+    assert.doesNotMatch(haystack, new RegExp(escapeRegExp(oldMarketplace)))
+  })
+
+  it('publishes the Claude plugin marketplace as clone-loop', () => {
+    const marketplace = JSON.parse(readFileSync(join(root, '.claude-plugin', 'marketplace.json'), 'utf8'))
+
+    assert.equal(marketplace.name, 'clone-loop')
+    assert.equal(marketplace.plugins[0].name, 'clone')
   })
 
   it('uses clone-loop for package and Clone MCP client identity', () => {
