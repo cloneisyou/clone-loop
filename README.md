@@ -37,9 +37,9 @@ Then walk away.
 
 ## Why people use it
 
-- **Stop typing "yes, keep going."** Clone predicts the obvious next step
-  and injects it for you. Threshold-gated so it only auto-continues when
-  it's confident.
+- **Stop typing "yes, keep going", "make test", "fix the failures", or
+  "try again."** Clone predicts the obvious next step and injects it for
+  you. Threshold-gated so it only auto-continues when it's confident.
 - **Rich context, not a one-line snapshot.** Each prediction sees your
   original task, every prior iteration's user turn, and a full timeline of
   what Claude did this iteration — text, tool calls, and tool results.
