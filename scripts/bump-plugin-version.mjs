@@ -106,5 +106,6 @@ if (existsSync(codexManifestPath)) {
 }
 updateClientVersion(join(options.root, 'hooks', 'stop-hook.mjs'), nextVersion)
 updateClientVersion(join(options.root, 'hooks', 'ask-user-question-hook.mjs'), nextVersion)
+updateClientVersion(join(options.root, 'scripts', 'predict-interview-answer.mjs'), nextVersion)
 
 console.log(`clone plugin version: ${previousVersion} -> ${nextVersion}`)

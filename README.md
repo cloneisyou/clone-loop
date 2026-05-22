@@ -90,6 +90,7 @@ Open your agent and run:
 
 ```text
 /clone:api-key status
+/clone:interview "Clarify the feature before coding" --mode deep
 /clone:loop "Run tests and fix any failures" --max-iterations 5
 ```
 
@@ -106,10 +107,27 @@ To update later: `claude plugin marketplace update clone-labs && claude plugin u
 
 | Command | What it does |
 |---|---|
+| `/clone:interview "<topic>" [options]` | Clarify requirements into a local spec. |
 | `/clone:loop "<task>" [options]` | Start a loop. |
 | `/clone:cancel-loop` | Cancel the active loop. |
 | `/clone:api-key status\|import-env\|set\|clear` | Manage your Clone API key. |
 | `/clone:help` | Show command help. |
+
+### Options for `/clone:interview`
+
+- `--mode <quick|deep>` — interview depth. Default `deep`.
+- `--max-questions <n>` — maximum questions before restating. Default `12`.
+- `--output <path>` — project-local markdown spec path. Default
+  `.claude/clone-interview.local.md`.
+- `--clone-threshold <n>` — confidence threshold for Clone-predicted
+  interview answers. Default `0.75`.
+- `--no-auto-answer` — disable Clone-predicted answers and always ask you.
+
+Clone Interview is the requirements side of Clone. It inspects repo facts,
+asks human-judgment questions one at a time, asks Clone MCP to predict how you
+would answer, and only auto-records the answer when confidence clears the
+threshold. Low-confidence questions escalate to you. v1 is plugin-only for
+question generation: Clone does not generate the interview questions yet.
 
 ### Options for `/clone:loop`
 
@@ -247,8 +265,13 @@ existing config.
 Then start a loop:
 
 ```text
+clone-interview "Clarify the feature before coding" --mode deep
 clone-loop "Run tests and fix any failures" --max-iterations 5
 ```
+
+In Codex, Clone Interview uses the skill flow to run the same prediction script
+before each user-facing interview question. In Claude Code, the bundled
+AskUserQuestion hook can fill high-confidence answers automatically.
 
 Codex plugin hooks require trust review. If Codex warns about untrusted hooks,
 open `/hooks`, trust the Clone Loop plugin hooks, and retry.
