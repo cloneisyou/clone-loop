@@ -231,6 +231,14 @@ configuration:
 - `hooks/codex-hooks.json` runs the Codex Stop hook that injects confident
   Clone-predicted next prompts.
 
+Install the Codex marketplace from this repo:
+
+```bash
+codex plugin marketplace add cloneisyou/clone-loop --ref main
+```
+
+Then install or enable `clone-loop@clone-loop` from Codex's `/plugins` UI.
+
 First run `clone-setup` in Codex. It enables `[features].plugin_hooks = true`
 in `~/.codex/config.toml`, reports the effective Clone API key source, and
 leaves a one-time `config.toml.clone-loop.bak` backup before changing an
