@@ -1,15 +1,11 @@
 #!/usr/bin/env node
 
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendLoopHistory, validateActiveLoopState } from './loop-state-guard.mjs'
 import { resolve } from 'node:path'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const CAP = 240
-
-function nowIso() {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-}
 
 function readStdin() {
   return new Promise((resolveRead) => {
@@ -25,30 +21,6 @@ function readStdin() {
 function parseJson(input) {
   const normalized = input.replace(/^\uFEFF/, '').trim()
   return normalized ? JSON.parse(normalized) : {}
-}
-
-function parseYamlScalar(value) {
-  const raw = value.trim()
-  if (raw === 'null') return null
-  if (raw.startsWith('"') && raw.endsWith('"')) {
-    return raw.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-  }
-  return raw
-}
-
-function parseState(content) {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) return null
-
-  const frontmatter = {}
-  for (const line of match[1].split(/\r?\n/)) {
-    const separator = line.indexOf(':')
-    if (separator < 0) continue
-    const key = line.slice(0, separator).trim()
-    const value = line.slice(separator + 1)
-    frontmatter[key] = parseYamlScalar(value)
-  }
-  return { frontmatter }
 }
 
 function stringValue(value) {
@@ -92,19 +64,20 @@ function summarize({ toolName, filePath, toolInput, toolResponse }) {
 }
 
 function appendHistory(record) {
-  appendFileSync(LOOP_HISTORY_FILE, `${JSON.stringify({ ts: nowIso(), ...record })}\n`)
+  appendLoopHistory(LOOP_HISTORY_FILE, record)
 }
 
 async function main() {
-  if (!existsSync(LOOP_STATE_FILE)) return
-
   const hookInput = parseJson(await readStdin())
-  const state = parseState(readFileSync(LOOP_STATE_FILE, 'utf8'))
-  if (!state) return
-
-  const stateSession = stringValue(state.frontmatter.session_id)
   const hookSession = hookInput.session_id ? stringValue(hookInput.session_id) : ''
-  if (stateSession && hookSession && stateSession !== hookSession) return
+  const validation = validateActiveLoopState({
+    statePath: LOOP_STATE_FILE,
+    historyPath: LOOP_HISTORY_FILE,
+    hookSession,
+    source: 'post-tool-use',
+  })
+  if (!validation.ok) return
+  const { state } = validation
 
   const toolName = stringValue(hookInput.tool_name || hookInput.toolName)
   if (!/^(Write|Edit|MultiEdit)$/.test(toolName)) return

@@ -25,14 +25,16 @@ function escapeRegExp(value) {
 }
 
 function writeState(workdir, overrides = {}) {
+  const { writeLoopStart = true, ...stateOverrides } = overrides
   const state = {
     iteration: 1,
     max_iterations: 3,
     session_id: 'session-123',
     clone_threshold: 0.6,
     clone_agent: 'Claude Code Clone Loop',
+    started_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     prompt: 'Fix the bug and run tests.',
-    ...overrides,
+    ...stateOverrides,
   }
 
   mkdirSync(join(workdir, '.claude'), { recursive: true })
@@ -44,10 +46,25 @@ max_iterations: ${state.max_iterations}
 session_id: ${state.session_id}
 clone_threshold: ${state.clone_threshold}
 clone_agent: "${state.clone_agent}"
+started_at: "${state.started_at}"
 ---
 ${state.prompt}
 `,
   )
+  if (writeLoopStart) {
+    writeFileSync(
+      join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
+      `${JSON.stringify({
+        ts: state.started_at,
+        event: 'loop-start',
+        session_id: state.session_id,
+        max_iterations: Number(state.max_iterations),
+        clone_threshold: Number(state.clone_threshold),
+        clone_agent: state.clone_agent,
+        prompt: state.prompt,
+      })}\n`,
+    )
+  }
 }
 
 function runHook(workdir, endpoint, options = {}) {
@@ -387,6 +404,11 @@ describe('Clone Loop v2 stop hook', () => {
       historyPath,
       [
         JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
           ts: '2026-01-01T00:00:01Z',
           event: 'stop',
           decision: 'continue',
@@ -442,14 +464,21 @@ describe('Clone Loop v2 stop hook', () => {
     const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
     writeFileSync(
       historyPath,
-      JSON.stringify({
-        ts: '2026-01-01T00:00:02Z',
-        event: 'ask-user-question',
-        decision: 'auto-answer-freeform',
-        confidence: 0.91,
-        threshold: 0.6,
-        answers: { 'Should we open a PR?': 'Yes, open it as a draft.' },
-      }) + '\n',
+      [
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:02Z',
+          event: 'ask-user-question',
+          decision: 'auto-answer-freeform',
+          confidence: 0.91,
+          threshold: 0.6,
+          answers: { 'Should we open a PR?': 'Yes, open it as a draft.' },
+        }),
+      ].join('\n') + '\n',
     )
 
     await withMcpServer(
@@ -477,7 +506,13 @@ describe('Clone Loop v2 stop hook', () => {
     writeState(workdir)
     mkdirSync(join(workdir, '.claude'), { recursive: true })
     const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
-    const lines = []
+    const lines = [
+      JSON.stringify({
+        ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+        event: 'loop-start',
+        session_id: 'session-123',
+      }),
+    ]
     for (let index = 1; index <= 30; index += 1) {
       lines.push(
         JSON.stringify({
@@ -543,17 +578,24 @@ describe('Clone Loop v2 stop hook', () => {
     const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
     writeFileSync(
       historyPath,
-      JSON.stringify({
-        ts: '2026-01-01T00:00:10Z',
-        event: 'stop',
-        decision: 'continue',
-        iteration: 2,
-        confidence: 0.9,
-        threshold: 0.6,
-        prediction_id: 'p-cont',
-        status: 'auto',
-        predicted_response: 'Run focused tests next.',
-      }) + '\n',
+      [
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:10Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 2,
+          confidence: 0.9,
+          threshold: 0.6,
+          prediction_id: 'p-cont',
+          status: 'auto',
+          predicted_response: 'Run focused tests next.',
+        }),
+      ].join('\n') + '\n',
     )
 
     const transcriptPath = join(workdir, 'transcript.jsonl')
@@ -608,17 +650,24 @@ describe('Clone Loop v2 stop hook', () => {
     const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
     writeFileSync(
       historyPath,
-      JSON.stringify({
-        ts: '2026-01-01T00:00:10Z',
-        event: 'stop',
-        decision: 'continue',
-        iteration: 2,
-        confidence: 0.9,
-        threshold: 0.6,
-        prediction_id: 'p-rich',
-        status: 'auto',
-        predicted_response: 'Make the change.',
-      }) + '\n',
+      [
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:10Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 2,
+          confidence: 0.9,
+          threshold: 0.6,
+          prediction_id: 'p-rich',
+          status: 'auto',
+          predicted_response: 'Make the change.',
+        }),
+      ].join('\n') + '\n',
     )
 
     const transcriptPath = join(workdir, 'transcript.jsonl')
@@ -687,17 +736,24 @@ describe('Clone Loop v2 stop hook', () => {
     const historyPath = join(workdir, '.claude', 'clone-loop.history.local.jsonl')
     writeFileSync(
       historyPath,
-      JSON.stringify({
-        ts: '2026-01-01T00:00:10Z',
-        event: 'stop',
-        decision: 'continue',
-        iteration: 2,
-        confidence: 0.9,
-        threshold: 0.6,
-        prediction_id: 'p-summary',
-        status: 'auto',
-        predicted_response: 'Carry on.',
-      }) + '\n',
+      [
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: '2026-01-01T00:00:10Z',
+          event: 'stop',
+          decision: 'continue',
+          iteration: 2,
+          confidence: 0.9,
+          threshold: 0.6,
+          prediction_id: 'p-summary',
+          status: 'auto',
+          predicted_response: 'Carry on.',
+        }),
+      ].join('\n') + '\n',
     )
 
     const longLines = []
@@ -791,7 +847,7 @@ describe('Clone Loop v2 stop hook', () => {
     }
   })
 
-  it('continues the loop and updates session_id when session IDs change', async () => {
+  it('removes stale loop state and does not continue when session IDs change', async () => {
     writeState(workdir, { session_id: 'session-aaa' })
 
     await withMcpServer(
@@ -808,19 +864,59 @@ describe('Clone Loop v2 stop hook', () => {
         const result = await runHook(workdir, endpoint, { sessionId: 'session-bbb' })
 
         assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
-        // Loop continued — block() was called with the prediction.
-        const output = JSON.parse(result.stdout)
-        assert.equal(output.decision, 'block')
-        assert.match(output.reason, /Continue after session rotation\./)
-        // Diagnostic on stderr explaining the session change.
-        assert.match(result.stderr, /session ID changed/)
-        assert.match(result.stderr, /session-aaa/)
-        assert.match(result.stderr, /session-bbb/)
-        // State file updated with the new session_id.
-        const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
-        assert.match(state, /session_id: session-bbb/)
-        // Clone MCP was called (loop continued).
-        assert.ok(calls.length > 0)
+        assert.equal(result.stdout, '')
+        assert.match(result.stderr, /stale-session-state/)
+        assert.match(result.stderr, /Run \/clone:loop again/)
+        assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
+        assert.equal(calls.length, 0)
+      },
+    )
+  })
+
+  it('removes stale loop state and does not continue when loop-start is missing', async () => {
+    writeState(workdir, { writeLoopStart: false })
+
+    await withMcpServer(
+      {
+        id: 'prediction-missing-loop-start',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'This must not be injected.',
+        confidence: 0.99,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        assert.equal(result.stdout, '')
+        assert.match(result.stderr, /stale-missing-loop-start/)
+        assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
+        assert.equal(calls.length, 0)
+      },
+    )
+  })
+
+  it('removes stale loop state and does not continue after the TTL expires', async () => {
+    writeState(workdir, { started_at: '2000-01-01T00:00:00Z' })
+
+    await withMcpServer(
+      {
+        id: 'prediction-expired-state',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'This expired loop must not continue.',
+        confidence: 0.99,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        assert.equal(result.stdout, '')
+        assert.match(result.stderr, /stale-expired-state/)
+        assert.throws(() => readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
+        assert.equal(calls.length, 0)
       },
     )
   })

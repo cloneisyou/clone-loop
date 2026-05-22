@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { resolveCloneToken } from '../scripts/clone-auth.mjs'
 import {
@@ -12,6 +12,11 @@ import {
   loadInjectedUserTurns,
   loadIterationBoundaries,
 } from '../scripts/conversation-context.mjs'
+import {
+  appendLoopHistory,
+  removeLoopState,
+  validateActiveLoopState,
+} from '../scripts/loop-state-guard.mjs'
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
@@ -20,14 +25,8 @@ const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
 
-function nowIso() {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-}
-
 function appendHistory(record) {
-  try {
-    appendFileSync(LOOP_HISTORY_FILE, `${JSON.stringify({ ts: nowIso(), ...record })}\n`)
-  } catch {}
+  appendLoopHistory(LOOP_HISTORY_FILE, record)
 }
 
 function readStdin() {
@@ -46,37 +45,8 @@ function parseJson(input) {
   return normalized ? JSON.parse(normalized) : {}
 }
 
-function parseYamlScalar(value) {
-  const raw = value.trim()
-  if (raw === 'null') return null
-  if (raw.startsWith('"') && raw.endsWith('"')) {
-    return raw.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-  }
-  return raw
-}
-
-function parseState(content) {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) return null
-
-  const frontmatter = {}
-  for (const line of match[1].split(/\r?\n/)) {
-    const separator = line.indexOf(':')
-    if (separator < 0) continue
-    const key = line.slice(0, separator).trim()
-    const value = line.slice(separator + 1)
-    frontmatter[key] = parseYamlScalar(value)
-  }
-
-  return {
-    frontmatter,
-    prompt: match[2].replace(/^\r?\n/, ''),
-    content,
-  }
-}
-
 function removeState() {
-  rmSync(LOOP_STATE_FILE, { force: true })
+  removeLoopState(LOOP_STATE_FILE)
 }
 
 function block(reason, systemMessage) {
@@ -230,14 +200,22 @@ function findLastContinueTs(historyPath) {
 
 async function main() {
   const hookInput = parseJson(await readStdin())
-  if (!existsSync(LOOP_STATE_FILE)) return
+  const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
 
-  const state = parseState(readFileSync(LOOP_STATE_FILE, 'utf8'))
-  if (!state) {
-    console.error('Clone Loop: state file corrupted; frontmatter is missing.')
-    removeState()
+  const validation = validateActiveLoopState({
+    statePath: LOOP_STATE_FILE,
+    historyPath: LOOP_HISTORY_FILE,
+    hookSession,
+    source: 'stop',
+  })
+  if (!validation.ok) {
+    if (validation.reason === 'inactive') return
+    console.error(
+      `Clone Loop: ${validation.reason}; stale local loop state removed. Run /clone:loop again to start a new loop.`,
+    )
     return
   }
+  const { state } = validation
 
   const {
     iteration,
@@ -249,17 +227,6 @@ async function main() {
 
   const cloneThreshold = cloneThresholdRaw || '0.6'
   const cloneAgent = cloneAgentRaw || 'Claude Code Clone Loop'
-  const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
-
-  if (stateSession && stateSession !== hookSession) {
-    console.error(
-      `Clone Loop: session ID changed (state=${stateSession}, hook=${hookSession}); updating state and continuing.`,
-    )
-    // Patch state.content in memory so the iteration write below carries the
-    // corrected session_id into the file (avoids a separate disk round-trip).
-    state.content = state.content.replace(/^session_id: .*/m, `session_id: ${hookSession}`)
-    // Fall through — continue executing the hook with the new session.
-  }
 
   if (!isIntegerString(iteration)) {
     console.error('Clone Loop: state file corrupted; iteration is not numeric.')
