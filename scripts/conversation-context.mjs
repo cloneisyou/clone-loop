@@ -124,13 +124,36 @@ function detectTimestampField(records) {
   return null
 }
 
+function compareTimestamp(left, right) {
+  const leftMs = Date.parse(String(left || ''))
+  const rightMs = Date.parse(String(right || ''))
+  if (Number.isFinite(leftMs) && Number.isFinite(rightMs)) {
+    return leftMs - rightMs
+  }
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function extractAssistantTexts(record) {
-  if (record?.message?.role !== 'assistant') return []
-  const content = record.message?.content
+  if (record?.type === 'event_msg' && record?.payload?.type === 'agent_message') {
+    const message = String(record.payload.message || '').trim()
+    return message ? [message] : []
+  }
+
+  const message = record?.message || (
+    record?.type === 'response_item' && record?.payload?.type === 'message'
+      ? record.payload
+      : null
+  )
+  if (message?.role !== 'assistant') return []
+  const content = message.content
   if (!Array.isArray(content)) return []
   const texts = []
   for (const block of content) {
     if (block?.type === 'text' && typeof block.text === 'string' && block.text) {
+      texts.push(block.text)
+    } else if (block?.type === 'output_text' && typeof block.text === 'string' && block.text) {
       texts.push(block.text)
     }
   }
@@ -165,7 +188,7 @@ export function assistantTextsThisIteration(transcriptPath, sinceTs) {
   for (const record of records) {
     if (useFilter) {
       const recordTs = record?.[timestampField]
-      if (typeof recordTs !== 'string' || recordTs <= sinceTs) continue
+      if (typeof recordTs !== 'string' || compareTimestamp(recordTs, sinceTs) <= 0) continue
     }
     for (const text of extractAssistantTexts(record)) {
       texts.push(text)
@@ -192,13 +215,40 @@ function toolResultBlockText(block) {
 }
 
 function extractIterationBlocks(record) {
-  const role = record?.message?.role
-  const content = record?.message?.content
+  if (record?.type === 'response_item' && record?.payload?.type === 'function_call') {
+    return [{
+      kind: 'tool_use',
+      id: String(record.payload.call_id || ''),
+      name: String(record.payload.name || ''),
+      input: safeJsonObject(record.payload.arguments),
+    }]
+  }
+  if (record?.type === 'response_item' && record?.payload?.type === 'function_call_output') {
+    return [{
+      kind: 'tool_result',
+      toolUseId: String(record.payload.call_id || ''),
+      text: String(record.payload.output || ''),
+    }]
+  }
+  if (record?.type === 'event_msg' && record?.payload?.type === 'agent_message') {
+    const text = String(record.payload.message || '').trim()
+    return text ? [{ kind: 'text', text }] : []
+  }
+
+  const message = record?.message || (
+    record?.type === 'response_item' && record?.payload?.type === 'message'
+      ? record.payload
+      : null
+  )
+  const role = message?.role
+  const content = message?.content
   if (!role || !Array.isArray(content)) return []
   const blocks = []
   for (const block of content) {
     if (!block || typeof block !== 'object') continue
     if (role === 'assistant' && block.type === 'text' && block.text) {
+      blocks.push({ kind: 'text', text: String(block.text) })
+    } else if (role === 'assistant' && block.type === 'output_text' && block.text) {
       blocks.push({ kind: 'text', text: String(block.text) })
     } else if (role === 'assistant' && block.type === 'tool_use') {
       blocks.push({ kind: 'tool_use', name: String(block.name || ''), input: block.input ?? {} })
@@ -211,6 +261,17 @@ function extractIterationBlocks(record) {
     }
   }
   return blocks
+}
+
+function safeJsonObject(value) {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  try {
+    const parsed = JSON.parse(String(value))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return { arguments: String(value) }
+  }
 }
 
 /**
@@ -239,6 +300,11 @@ function readTranscriptRecords(transcriptPath) {
 function buildToolNameMap(records) {
   const toolNameById = new Map()
   for (const record of records) {
+    if (record?.type === 'response_item' && record?.payload?.type === 'function_call') {
+      const id = record.payload.call_id || record.payload.id
+      if (id) toolNameById.set(String(id), String(record.payload.name || ''))
+      continue
+    }
     const content = record?.message?.content
     if (!Array.isArray(content)) continue
     for (const block of content) {
@@ -256,8 +322,8 @@ function collectBlocksInRange({ records, timestampField, startExclusive, endIncl
     if (timestampField) {
       const ts = record?.[timestampField]
       if (typeof ts !== 'string') continue
-      if (startExclusive && ts <= startExclusive) continue
-      if (endInclusive && ts > endInclusive) continue
+      if (startExclusive && compareTimestamp(ts, startExclusive) <= 0) continue
+      if (endInclusive && compareTimestamp(ts, endInclusive) > 0) continue
     }
     for (const block of extractIterationBlocks(record)) {
       if (block.kind === 'tool_result') {

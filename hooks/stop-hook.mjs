@@ -18,8 +18,8 @@ import {
   validateActiveLoopState,
 } from '../scripts/loop-state-guard.mjs'
 
-const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
-const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
+let LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
+let LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
 const CLIENT_VERSION = '0.14.2'
 const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
@@ -200,6 +200,11 @@ function findLastContinueTs(historyPath) {
 
 async function main() {
   const hookInput = parseJson(await readStdin())
+  if (hookInput.stop_hook_active === true) return
+
+  const root = hookInput.cwd ? resolve(String(hookInput.cwd)) : process.cwd()
+  LOOP_STATE_FILE = resolve(root, '.claude', 'clone-loop.local.md')
+  LOOP_HISTORY_FILE = resolve(root, '.claude', 'clone-loop.history.local.jsonl')
   const hookSession = hookInput.session_id ? String(hookInput.session_id) : ''
 
   const validation = validateActiveLoopState({

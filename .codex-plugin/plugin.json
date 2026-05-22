@@ -17,6 +17,8 @@
     "agent",
     "automation"
   ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Clone Loop",
@@ -25,14 +27,15 @@
     "developerName": "Clone",
     "category": "Productivity",
     "capabilities": [
-      "Interactive",
+      "Hooks",
+      "Skills",
       "MCP"
     ],
     "websiteURL": "https://clone.is/you",
     "defaultPrompt": [
-      "Predict the next prompt for this coding session.",
-      "Help me keep this task moving until tests pass.",
-      "Use Clone MCP context to suggest the next step."
+      "Set up Clone Loop for Codex.",
+      "Start a Clone Loop to keep working until tests pass.",
+      "Check my Clone API key status."
     ],
     "brandColor": "#6F42C1"
   }

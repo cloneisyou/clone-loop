@@ -82,4 +82,31 @@ describe('Clone Loop setup script', () => {
       }
     }
   })
+
+  it('uses Codex thread identity when started from Codex', () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'clone-loop-setup-codex-'))
+
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [setupPath, 'codex launcher smoke test'],
+        {
+          cwd: workdir,
+          env: {
+            ...process.env,
+            PLUGIN_ROOT: pluginRoot,
+            CODEX_THREAD_ID: 'codex-thread-123',
+          },
+          encoding: 'utf8',
+        },
+      )
+
+      assert.equal(result.status, 0, result.stderr)
+      const state = readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8')
+      assert.match(state, /session_id: codex-thread-123/)
+      assert.match(state, /clone_agent: "Codex Clone Loop"/)
+    } finally {
+      rmSync(workdir, { recursive: true, force: true })
+    }
+  })
 })
