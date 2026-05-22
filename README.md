@@ -76,14 +76,14 @@ Or install manually from your shell:
 
 ```bash
 claude plugin marketplace add cloneisyou/clone-loop@main
-claude plugin install clone@clone-loop --scope user
+claude plugin install clone-loop@clone-labs --scope user
 ```
 
 PowerShell:
 
 ```powershell
 claude.exe plugin marketplace add cloneisyou/clone-loop@main
-claude.exe plugin install clone@clone-loop --scope user
+claude.exe plugin install clone-loop@clone-labs --scope user
 ```
 
 Open your agent and run:
@@ -100,7 +100,7 @@ Cancel anytime with `/clone:cancel-loop`.
 > For private memory and your own prediction quality, set `CLONE_API_TOKEN`
 > and run `/clone:api-key import-env`.
 
-To update later: `claude plugin marketplace update clone-loop && claude plugin update clone@clone-loop`.
+To update later: `claude plugin marketplace update clone-labs && claude plugin update clone-loop@clone-labs`.
 
 ## Commands
 
@@ -231,6 +231,14 @@ configuration:
 - `hooks/codex-hooks.json` runs the Codex Stop hook that injects confident
   Clone-predicted next prompts.
 
+Install the Codex marketplace from this repo:
+
+```bash
+codex plugin marketplace add cloneisyou/clone-loop --ref main
+```
+
+Then install or enable `clone-loop@clone-loop` from Codex's `/plugins` UI.
+
 First run `clone-setup` in Codex. It enables `[features].plugin_hooks = true`
 in `~/.codex/config.toml`, reports the effective Clone API key source, and
 leaves a one-time `config.toml.clone-loop.bak` backup before changing an
@@ -268,7 +276,7 @@ claude plugin validate .
 > data against the demo fallback.
 
 > [!NOTE]
-> The `clone-loop` marketplace is hosted from this repo — not the official
+> The `clone-labs` marketplace is hosted from this repo — not the official
 > Anthropic `claude-plugins-official` marketplace.
 
 ## License

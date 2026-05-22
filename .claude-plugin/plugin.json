@@ -1,5 +1,5 @@
 {
-  "name": "clone",
+  "name": "clone-loop",
   "version": "0.14.3",
   "description": "Clone Loop for Claude Code. Runs iterative development loops, manages Clone API keys, predicts the next user prompt, and can answer AskUserQuestion during active loops.",
   "author": {

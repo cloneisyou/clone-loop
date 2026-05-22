@@ -1,5 +1,5 @@
 {
-  "name": "clone-loop",
+  "name": "clone-labs",
   "metadata": {
     "description": "Clone Loop Claude Code plugins."
   },
@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "clone",
+      "name": "clone-loop",
       "source": "./",
       "description": "Clone Loop for Claude Code. An automation loop powered by Clone MCP next-prompt prediction."
     }

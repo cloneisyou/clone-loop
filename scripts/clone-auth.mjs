@@ -6,7 +6,14 @@ export const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
 export const AUTH_FILE_NAME = 'auth.local.json'
 
 export function defaultPluginDataDir() {
-  return join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-loop')
+  return join(homedir(), '.claude', 'plugins', 'data', 'clone-loop-clone-labs')
+}
+
+function legacyPluginDataDirs() {
+  return [
+    join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-loop'),
+    join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-labs'),
+  ]
 }
 
 export function pluginDataDir(env = process.env) {
@@ -25,6 +32,12 @@ export function authFilePath(env = process.env) {
   return dir ? join(dir, AUTH_FILE_NAME) : ''
 }
 
+function authFileCandidates(env = process.env) {
+  const primary = authFilePath(env)
+  if (isPluginDataDirInjected(env)) return primary ? [primary] : []
+  return [primary, ...legacyPluginDataDirs().map((dir) => join(dir, AUTH_FILE_NAME))].filter(Boolean)
+}
+
 export function maskToken(token) {
   const value = String(token || '').trim()
   if (!value) return ''
@@ -33,16 +46,18 @@ export function maskToken(token) {
 }
 
 export function readPluginConfigToken(env = process.env) {
-  const file = authFilePath(env)
-  if (!file || !existsSync(file)) return null
+  for (const file of authFileCandidates(env)) {
+    if (!existsSync(file)) continue
 
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8'))
-    const token = String(parsed.clone_api_token || '').trim()
-    return token || null
-  } catch {
-    return null
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf8'))
+      const token = String(parsed.clone_api_token || '').trim()
+      if (token) return token
+    } catch {
+      // Keep checking legacy auth files.
+    }
   }
+  return null
 }
 
 export function writePluginConfigToken(token, env = process.env) {
