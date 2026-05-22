@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/cloneisyou/clone-loop/tags">
-    <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-loop?filter=clone-plugin-v*&label=version" alt="Version">
+    <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-loop?filter=clone--v*&label=version" alt="Version">
   </a>
   <a href="#quick-start">
     <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
@@ -212,7 +212,7 @@ linger in your transcript.
 ```bash
 git clone https://github.com/cloneisyou/clone-loop.git
 cd clone-loop
-git checkout clone-plugin-v0.3.0   # or any tag from the Releases page
+git checkout clone--v0.14.1   # or any tag from the Releases page
 claude --plugin-dir .
 ```
 

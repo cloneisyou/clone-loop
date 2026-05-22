@@ -54,6 +54,7 @@ describe('release automation', () => {
 
     assert.match(workflow, /Bump patch version/)
     assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
+    assert.match(workflow, /TAG="clone--v\$\{VERSION\}"/)
     assert.match(workflow, /git add .*\.claude-plugin\/plugin\.json .*\.codex-plugin\/plugin\.json/)
   })
 })

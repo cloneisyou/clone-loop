@@ -38,7 +38,7 @@ jobs:
       - name: Commit and tag release
         run: |
           VERSION="$(node -p "JSON.parse(require('fs').readFileSync('.claude-plugin/plugin.json', 'utf8')).version")"
-          TAG="clone-plugin-v${VERSION}"
+          TAG="clone--v${VERSION}"
 
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
@@ -49,5 +49,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .claude-plugin/plugin.json .codex-plugin/plugin.json hooks/stop-hook.mjs hooks/ask-user-question-hook.mjs README.md
           git commit -m "chore: release ${TAG}"
-          git tag -a "$TAG" -m "$TAG"
+          git tag -a "$TAG" -m "clone ${VERSION}"
           git push origin HEAD:main "$TAG"
