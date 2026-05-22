@@ -8,12 +8,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cloneisyou/clone-claude-plugin/tags">
-    <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-claude-plugin?filter=clone-plugin-v*&label=version" alt="Version">
+  <a href="https://github.com/cloneisyou/clone-loop/tags">
+    <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-loop?filter=clone-plugin-v*&label=version" alt="Version">
   </a>
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Clone%20MCP-next--prompt-0ea5e9" alt="Clone MCP">
-  <img src="https://img.shields.io/github/license/cloneisyou/clone-claude-plugin?color=green" alt="License">
+  <img src="https://img.shields.io/github/license/cloneisyou/clone-loop?color=green" alt="License">
 </p>
 
 <p align="center">
@@ -58,20 +58,20 @@ Paste this into your agent after install:
 Install - one command, Claude CLI auto-detected:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cloneisyou/clone-claude-plugin/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cloneisyou/clone-loop/main/scripts/install.sh | bash
 ```
 
 Or install manually from your shell:
 
 ```bash
-claude plugin marketplace add cloneisyou/clone-claude-plugin@main
+claude plugin marketplace add cloneisyou/clone-loop@main
 claude plugin install clone@clone-labs --scope user
 ```
 
 PowerShell:
 
 ```powershell
-claude.exe plugin marketplace add cloneisyou/clone-claude-plugin@main
+claude.exe plugin marketplace add cloneisyou/clone-loop@main
 claude.exe plugin install clone@clone-labs --scope user
 ```
 
@@ -199,13 +199,13 @@ linger in your transcript.
 ## Pinning a version
 
 ```bash
-git clone https://github.com/cloneisyou/clone-claude-plugin.git
-cd clone-claude-plugin
+git clone https://github.com/cloneisyou/clone-loop.git
+cd clone-loop
 git checkout clone-plugin-v0.3.0   # or any tag from the Releases page
 claude --plugin-dir .
 ```
 
-Tags: see [Releases](https://github.com/cloneisyou/clone-claude-plugin/releases).
+Tags: see [Releases](https://github.com/cloneisyou/clone-loop/releases).
 
 ## Requirements
 

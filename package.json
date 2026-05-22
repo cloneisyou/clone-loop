@@ -1,9 +1,9 @@
 {
-  "name": "clone-claude-plugin-tests",
+  "name": "clone-loop-tests",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/api-key-manager.test.mjs tests/setup-clone-loop.test.mjs tests/post-tool-use-capture.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs tests/release-automation.test.mjs",
+    "test": "node --test tests/api-key-manager.test.mjs tests/setup-clone-loop.test.mjs tests/post-tool-use-capture.test.mjs tests/repo-identity.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs tests/release-automation.test.mjs",
     "test:mcp:e2e": "node --test tests/remote-mcp-e2e.test.mjs"
   }
 }

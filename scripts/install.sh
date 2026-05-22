@@ -13,7 +13,7 @@ fi
 
 echo "Installing Clone with ${CLAUDE_BIN}..."
 
-if ! "${CLAUDE_BIN}" plugin marketplace add cloneisyou/clone-claude-plugin@main; then
+if ! "${CLAUDE_BIN}" plugin marketplace add cloneisyou/clone-loop@main; then
   echo "Marketplace add did not complete; refreshing clone-labs if it already exists."
   "${CLAUDE_BIN}" plugin marketplace update clone-labs || true
 fi

@@ -172,7 +172,7 @@ async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId 
   const init = await rpc(endpoint, token, 'initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'clone-claude-plugin', version: CLIENT_VERSION },
+    clientInfo: { name: 'clone-loop', version: CLIENT_VERSION },
   })
 
   const args = {
