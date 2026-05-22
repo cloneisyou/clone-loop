@@ -31,6 +31,23 @@ predicted response so the user does not have to handle the popup manually.
 
 ## Available Commands
 
+### /clone:interview
+
+Clarify a vague requirement into a local Clone Interview spec before coding.
+
+**Usage:**
+
+```bash
+/clone:interview "Add billing to the app"
+/clone:interview "Improve onboarding" --mode quick --max-questions 5
+/clone:interview "Build importer" --output docs/clone-interview/importer.md
+```
+
+Clone Interview is plugin-only in v1. It does not use Clone MCP as a question
+generator. The agent inspects repo facts first, asks human-judgment questions
+one at a time, and writes the working spec to
+`.claude/clone-interview.local.md` unless `--output` is provided.
+
 ### /clone:loop
 
 Start a Clone Loop in your current session.

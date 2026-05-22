@@ -34,8 +34,8 @@
     "websiteURL": "https://clone.is/you",
     "defaultPrompt": [
       "Set up Clone Loop for Codex.",
-      "Start a Clone Loop to keep working until tests pass.",
-      "Check my Clone API key status."
+      "Run a Clone Interview to clarify a feature before coding.",
+      "Start a Clone Loop to keep working until tests pass."
     ],
     "brandColor": "#6F42C1"
   }
