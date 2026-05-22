@@ -20,7 +20,7 @@ import {
 
 let LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 let LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const CLIENT_VERSION = '0.14.5'
+const CLIENT_VERSION = '0.14.6'
 const ANSI_BOLD = '\u001b[1m'
 const ANSI_PURPLE = '\u001b[35m'
 const ANSI_RESET = '\u001b[0m'
