@@ -1,6 +1,6 @@
 {
   "name": "clone-loop",
-  "version": "0.14.3",
+  "version": "0.14.4",
   "description": "Clone Loop keeps coding agents working with confidence-gated predicted next prompts from Clone MCP.",
   "author": {
     "name": "Clone",

@@ -19,7 +19,7 @@ import {
 
 const LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
 const LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
-const CLIENT_VERSION = '0.14.3'
+const CLIENT_VERSION = '0.14.4'
 
 function appendHistory(record) {
   appendLoopHistory(LOOP_HISTORY_FILE, record)
