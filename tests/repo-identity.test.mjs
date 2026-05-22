@@ -51,12 +51,15 @@ describe('repository identity', () => {
 
   it('uses clone-loop for package and Clone MCP client identity', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    const client = readFileSync(join(root, 'scripts', 'clone-mcp-client.mjs'), 'utf8')
     const stopHook = readFileSync(join(root, 'hooks', 'stop-hook.mjs'), 'utf8')
     const askHook = readFileSync(join(root, 'hooks', 'ask-user-question-hook.mjs'), 'utf8')
 
     assert.equal(pkg.name, 'clone-loop-tests')
-    assert.match(stopHook, /clientInfo: \{ name: 'clone-loop'/)
-    assert.match(askHook, /clientInfo: \{ name: 'clone-loop'/)
+    assert.match(client, /CLONE_MCP_CLIENT_NAME = 'clone-loop'/)
+    assert.match(client, /PLUGIN_VERSION/)
+    assert.match(stopHook, /clientInfo: cloneMcpClientInfo\(\)/)
+    assert.match(askHook, /clientInfo: cloneMcpClientInfo\(\)/)
   })
 
   it('installer can automatically star clone-loop through GitHub CLI', () => {

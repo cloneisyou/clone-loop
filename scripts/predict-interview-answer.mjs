@@ -3,145 +3,28 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { interviewHistoryPath, interviewStatePath } from './clone-paths.mjs'
 import { resolveCloneToken } from './clone-auth.mjs'
+import { cloneMcpClientInfo, cloneMcpEndpoint, cloneMcpRpc } from './clone-mcp-client.mjs'
+import { numeric, parseJson, readStdin } from './clone-utils.mjs'
+import { mapPredictionToOption, rankedPredictionCandidates } from './interview-answer-utils.mjs'
 import { appendLoopHistory, parseState } from './loop-state-guard.mjs'
-
-const CLIENT_VERSION = '0.14.6'
-
-function readStdin() {
-  return new Promise((resolveRead) => {
-    let input = ''
-    process.stdin.setEncoding('utf8')
-    process.stdin.on('data', (chunk) => {
-      input += chunk
-    })
-    process.stdin.on('end', () => resolveRead(input))
-  })
-}
-
-function parseJson(input) {
-  const normalized = String(input || '').replace(/^\uFEFF/, '').trim()
-  return normalized ? JSON.parse(normalized) : {}
-}
-
-function numeric(value, fallback = 0) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
-function normalize(value) {
-  return String(value || '')
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[`*_~"'“”‘’]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function labelBoundaryMatch(text, label) {
-  const normalizedLabel = normalize(label)
-  if (!normalizedLabel) return false
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(normalizedLabel)}([^\\p{L}\\p{N}]|$)`, 'u').test(text)
-}
-
-export function mapPredictionToOption(predictedResponse, options = []) {
-  const labels = options.map((option) => String(option?.label || '').trim()).filter(Boolean)
-  if (!labels.length) return ''
-
-  const text = normalize(predictedResponse)
-  const firstLine = normalize(String(predictedResponse || '').split(/\r?\n/).find((line) => line.trim()) || '')
-  const letterMatch = text.match(/^(?:option\s*)?([a-j])(?:[.)\s:-]|$)/)
-  if (letterMatch) {
-    const index = letterMatch[1].charCodeAt(0) - 'a'.charCodeAt(0)
-    if (labels[index]) return labels[index]
-  }
-
-  const exactMatches = labels.filter((label) => {
-    const normalizedLabel = normalize(label)
-    return normalizedLabel === text || normalizedLabel === firstLine
-  })
-  if (exactMatches.length === 1) return exactMatches[0]
-
-  const prefixMatches = labels.filter((label) => {
-    const normalizedLabel = normalize(label)
-    return (
-      text.startsWith(`${normalizedLabel} `) ||
-      text.startsWith(`${normalizedLabel}.`) ||
-      text.startsWith(`${normalizedLabel}:`) ||
-      text.startsWith(`${normalizedLabel}-`)
-    )
-  })
-  if (prefixMatches.length === 1) return prefixMatches[0]
-
-  const containedMatches = labels.filter((label) => labelBoundaryMatch(text, label))
-  return containedMatches.length === 1 ? containedMatches[0] : ''
-}
-
-function parseSse(text) {
-  const frames = text
-    .split(/\r?\n\r?\n/)
-    .map((event) =>
-      event
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
-        .join('\n')
-        .trim(),
-    )
-    .filter(Boolean)
-
-  for (const frame of frames) {
-    try {
-      return JSON.parse(frame)
-    } catch {}
-  }
-
-  return text ? JSON.parse(text) : null
-}
-
-async function rpc(endpoint, token, method, params = {}, sessionId = '') {
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-    'X-Clone-API-Key': token,
-  }
-  if (sessionId) headers['mcp-session-id'] = sessionId
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    throw new Error(`Clone MCP ${method} failed with HTTP ${res.status}: ${text.slice(0, 500)}`)
-  }
-
-  return {
-    sessionId: res.headers.get('mcp-session-id') || sessionId,
-    payload: text ? parseSse(text) : null,
-  }
-}
 
 async function submitFeedback({ endpoint, token, predictionId, status, actualResponse, mcpSessionId }) {
   if (!predictionId) return
   const args = { prediction_id: predictionId, status }
   if (actualResponse) args.actual_response = actualResponse
-  await rpc(endpoint, token, 'tools/call', { name: 'submit_feedback', arguments: args }, mcpSessionId)
+  await cloneMcpRpc(endpoint, token, 'tools/call', { name: 'submit_feedback', arguments: args }, mcpSessionId)
 }
 
 async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId }) {
-  const endpoint = process.env.CLONE_MCP_URL || 'https://api.clone.is/mcp'
+  const endpoint = cloneMcpEndpoint()
   const { token } = resolveCloneToken()
 
-  const init = await rpc(endpoint, token, 'initialize', {
+  const init = await cloneMcpRpc(endpoint, token, 'initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'clone-loop', version: CLIENT_VERSION },
+    clientInfo: cloneMcpClientInfo(),
   })
 
   const args = {
@@ -152,7 +35,7 @@ async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId 
   }
   if (sessionId) args.session_id = sessionId
 
-  const prediction = await rpc(
+  const prediction = await cloneMcpRpc(
     endpoint,
     token,
     'tools/call',
@@ -173,11 +56,11 @@ async function clonePredictNextPrompt({ agent, agentInput, threshold, sessionId 
 }
 
 function historyPath(root) {
-  return resolve(root, '.claude', 'clone-interview.history.local.jsonl')
+  return interviewHistoryPath(root)
 }
 
 function statePath(root) {
-  return resolve(root, '.claude', 'clone-interview.local.md')
+  return interviewStatePath(root)
 }
 
 function appendInterviewHistory(root, record) {
@@ -212,8 +95,14 @@ function buildAgentInput({ state, question, options, answerKind, lastAssistantMe
   return `Clone Interview topic:
 ${frontmatter.topic || ''}
 
-Current Clone Interview spec / ledger:
+Current Clone Interview spec:
 ${spec || '(empty spec)'}
+
+Pay special attention to these sections when present:
+- Goal Contract: what goal, outcome, scope, non-goals, decision boundaries, constraints, and acceptance criteria are already settled.
+- Decision Ledger: which decisions came from code, user, Clone auto-answer, or Clone escalation.
+- Plan Draft: what implementation phases, likely touched areas, tests/checks, risks, and acceptance checklist are emerging.
+- Readiness Audit: what gap this question should close before execution handoff.
 
 Latest agent context:
 ${latest || '(no latest assistant message provided)'}
@@ -228,52 +117,13 @@ ${formatOptions(options)}
 Predict the exact answer this user would give to the interview question.
 Rules:
 - Write as the user, not as the agent.
-- Preserve concrete scope, constraints, non-goals, and acceptance criteria.
+- Preserve concrete scope, constraints, non-goals, decision boundaries, acceptance criteria, and plan impact.
 - If options are provided and one clearly matches, answer with that option label.
 - If confidence is low, still return the best prediction; the caller will escalate.`
 }
 
-function candidateText(candidate) {
-  if (!candidate) return ''
-  if (typeof candidate === 'string') return candidate
-  return String(
-    candidate.predicted_response ||
-      candidate.response ||
-      candidate.text ||
-      candidate.content ||
-      candidate.message ||
-      '',
-  )
-}
-
-function candidateConfidence(candidate, fallback) {
-  if (!candidate || typeof candidate === 'string') return fallback
-  return numeric(
-    candidate.confidence ??
-      candidate.probability ??
-      candidate.prob ??
-      candidate.p ??
-      candidate.score,
-    fallback,
-  )
-}
-
-function rankedCandidates(prediction) {
-  const candidates = []
-  const topConfidence = numeric(prediction?.confidence, 0)
-  if (prediction?.predicted_response) {
-    candidates.push({ text: String(prediction.predicted_response), confidence: topConfidence, index: candidates.length })
-  }
-  for (const candidate of Array.isArray(prediction?.candidates) ? prediction.candidates : []) {
-    const text = candidateText(candidate)
-    if (!text) continue
-    candidates.push({ text, confidence: candidateConfidence(candidate, topConfidence), index: candidates.length })
-  }
-  return candidates.sort((left, right) => right.confidence - left.confidence || left.index - right.index)
-}
-
 function selectAnswer({ prediction, answerKind, options }) {
-  const ranked = rankedCandidates(prediction)
+  const ranked = rankedPredictionCandidates(prediction)
   if (answerKind === 'choice' && Array.isArray(options) && options.length) {
     for (const candidate of ranked) {
       const mapped = mapPredictionToOption(candidate.text, options)

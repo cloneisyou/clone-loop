@@ -1,24 +1,9 @@
 #!/usr/bin/env node
 
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { loopStatePath } from '../scripts/clone-paths.mjs'
+import { parseJson, readStdin } from '../scripts/clone-utils.mjs'
 import { predictInterviewAnswer } from '../scripts/predict-interview-answer.mjs'
-
-function readStdin() {
-  return new Promise((resolveRead) => {
-    let input = ''
-    process.stdin.setEncoding('utf8')
-    process.stdin.on('data', (chunk) => {
-      input += chunk
-    })
-    process.stdin.on('end', () => resolveRead(input))
-  })
-}
-
-function parseJson(input) {
-  const normalized = String(input || '').replace(/^\uFEFF/, '').trim()
-  return normalized ? JSON.parse(normalized) : {}
-}
 
 function allowAnswer({ toolInput, answers, confidence, threshold }) {
   console.log(
@@ -53,7 +38,7 @@ async function main() {
   if (hookInput.tool_name && hookInput.tool_name !== 'AskUserQuestion') return
 
   // Clone Loop owns AskUserQuestion while an active loop state exists.
-  if (existsSync(resolve(process.cwd(), '.claude', 'clone-loop.local.md'))) return
+  if (existsSync(loopStatePath())) return
 
   const toolInput = hookInput.tool_input || {}
   const questions = Array.isArray(toolInput.questions) ? toolInput.questions : []

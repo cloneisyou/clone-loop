@@ -15,7 +15,7 @@ function writeFixture(rootDir, path, contents) {
 }
 
 describe('release automation', () => {
-  it('bumps plugin version across manifests and hook clients', () => {
+  it('bumps plugin version across manifests', () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'clone-release-fixture-'))
 
     try {
@@ -29,10 +29,6 @@ describe('release automation', () => {
         '.codex-plugin/plugin.json',
         JSON.stringify({ name: 'clone-loop', version: '0.2.7', description: 'Clone Loop' }, null, 2),
       )
-      writeFixture(fixtureRoot, 'hooks/stop-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
-      writeFixture(fixtureRoot, 'hooks/ask-user-question-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
-      writeFixture(fixtureRoot, 'scripts/predict-interview-answer.mjs', "const CLIENT_VERSION = '0.2.7'\n")
-
       const result = spawnSync(
         process.execPath,
         [join(root, 'scripts/bump-plugin-version.mjs'), '--root', fixtureRoot, '--part', 'patch'],
@@ -42,9 +38,6 @@ describe('release automation', () => {
       assert.equal(result.status, 0, result.stderr || result.stdout)
       assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.claude-plugin/plugin.json'), 'utf8')).version, '0.2.8')
       assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.codex-plugin/plugin.json'), 'utf8')).version, '0.2.8')
-      assert.match(readFileSync(join(fixtureRoot, 'hooks/stop-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
-      assert.match(readFileSync(join(fixtureRoot, 'hooks/ask-user-question-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
-      assert.match(readFileSync(join(fixtureRoot, 'scripts/predict-interview-answer.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
       assert.match(result.stdout, /0\.2\.7 -> 0\.2\.8/)
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true })
@@ -61,6 +54,7 @@ describe('release automation', () => {
     assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
     assert.match(workflow, /TAG="clone--v\$\{VERSION\}"/)
     assert.match(workflow, /git add .*\.claude-plugin\/plugin\.json .*\.codex-plugin\/plugin\.json/)
-    assert.match(workflow, /git add .*scripts\/predict-interview-answer\.mjs/)
+    assert.doesNotMatch(workflow, /git add .*hooks\/stop-hook\.mjs/)
+    assert.doesNotMatch(workflow, /git add .*scripts\/predict-interview-answer\.mjs/)
   })
 })

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { nowIso } from './clone-utils.mjs'
 
 export const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
 export const AUTH_FILE_NAME = 'auth.local.json'
@@ -71,7 +72,7 @@ export function writePluginConfigToken(token, env = process.env) {
     `${JSON.stringify(
       {
         clone_api_token: value,
-        updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+        updated_at: nowIso(),
       },
       null,
       2,

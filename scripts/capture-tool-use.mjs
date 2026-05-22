@@ -2,30 +2,12 @@
 
 import { appendLoopHistory, validateActiveLoopState } from './loop-state-guard.mjs'
 import { resolve } from 'node:path'
+import { loopHistoryPath, loopStatePath } from './clone-paths.mjs'
+import { parseJson, readStdin, stringValue } from './clone-utils.mjs'
 
-let LOOP_STATE_FILE = resolve(process.cwd(), '.claude', 'clone-loop.local.md')
-let LOOP_HISTORY_FILE = resolve(process.cwd(), '.claude', 'clone-loop.history.local.jsonl')
+let LOOP_STATE_FILE = loopStatePath()
+let LOOP_HISTORY_FILE = loopHistoryPath()
 const CAP = 240
-
-function readStdin() {
-  return new Promise((resolveRead) => {
-    let input = ''
-    process.stdin.setEncoding('utf8')
-    process.stdin.on('data', (chunk) => {
-      input += chunk
-    })
-    process.stdin.on('end', () => resolveRead(input))
-  })
-}
-
-function parseJson(input) {
-  const normalized = input.replace(/^\uFEFF/, '').trim()
-  return normalized ? JSON.parse(normalized) : {}
-}
-
-function stringValue(value) {
-  return String(value || '').trim()
-}
 
 function truncate(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
@@ -80,8 +62,8 @@ function appendHistory(record) {
 async function main() {
   const hookInput = parseJson(await readStdin())
   const root = hookInput.cwd ? resolve(String(hookInput.cwd)) : process.cwd()
-  LOOP_STATE_FILE = resolve(root, '.claude', 'clone-loop.local.md')
-  LOOP_HISTORY_FILE = resolve(root, '.claude', 'clone-loop.history.local.jsonl')
+  LOOP_STATE_FILE = loopStatePath(root)
+  LOOP_HISTORY_FILE = loopHistoryPath(root)
   const hookSession = hookInput.session_id ? stringValue(hookInput.session_id) : ''
   const validation = validateActiveLoopState({
     statePath: LOOP_STATE_FILE,

@@ -1,10 +1,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs'
+import { nowIso } from './clone-utils.mjs'
 
 const DEFAULT_TTL_HOURS = 24
-
-export function nowIso() {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-}
 
 export function parseYamlScalar(value) {
   const raw = value.trim()

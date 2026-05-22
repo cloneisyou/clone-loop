@@ -1,5 +1,5 @@
 ---
-description: "Clarify requirements into a Clone Interview spec"
+description: "Clarify a goal into a Clone Interview plan"
 argument-hint: "TOPIC [--max-questions N] [--mode quick|deep] [--output PATH]"
 allowed-tools: Bash(node *setup-clone-interview.mjs*), AskUserQuestion
 hide-from-slash-command-tool: "true"
@@ -19,4 +19,18 @@ First inspect repository facts that are directly relevant to the topic. Auto-con
 
 Ask all human-judgment questions through AskUserQuestion so Clone Interview can predict the user's answer first. When the prediction clears the configured threshold, the hook will fill in the answer automatically. When confidence is low, AskUserQuestion will reach the user normally.
 
-Ask one question at a time. For free-form answers that include scope or constraints, structure the answer and confirm nothing was lost before recording it. Before closing, restate the one-sentence goal and get user confirmation, then update the spec markdown.
+Drive the interview toward an executable plan, not just a list of answers. Keep the spec's Goal Contract, Decision Ledger, Plan Draft, Readiness Audit, and Execution Handoff current after every answer.
+
+Ask one question at a time using this frame:
+
+```md
+Current understanding: ...
+Blocked decision: ...
+Clone predicted answer: ... or escalated
+Question: ...
+Plan impact: ...
+```
+
+Question priority is goal, outcome, scope/non-goals, decision boundaries, constraints, acceptance criteria, then plan risks. Record decisions as `[from-user]`, high-confidence Clone answers as `[from-clone][auto]`, and low-confidence suggestions as `[from-clone][escalated]` before asking the user.
+
+Before closing, run the Readiness Audit. If anything fails, ask the single question that most improves the Plan Draft. When the audit passes, ask the user to choose: Refine plan, Start Clone Loop with this plan, Implement manually from this plan, or Stop here.

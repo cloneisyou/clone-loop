@@ -53,6 +53,11 @@ describe('Clone Interview setup script', () => {
       assert.match(state, /auto_answer: true/)
       assert.match(state, /output_path: "\.claude\/clone-interview\.local\.md"/)
       assert.match(state, /# Clone Interview/)
+      assert.match(state, /## Goal Contract/)
+      assert.match(state, /## Decision Ledger/)
+      assert.match(state, /## Plan Draft/)
+      assert.match(state, /## Readiness Audit/)
+      assert.match(state, /## Execution Handoff/)
       assert.match(state, /\[from-code\]\[auto-confirmed\]/)
 
       const history = readFileSync(join(workdir, '.claude', 'clone-interview.history.local.jsonl'), 'utf8')

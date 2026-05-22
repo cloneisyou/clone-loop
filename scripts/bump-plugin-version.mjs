@@ -63,30 +63,12 @@ function bumpVersion(version, part) {
   return `${major}.${minor}.${patch + 1}`
 }
 
-function replaceOnce(contents, pattern, replacement, label) {
-  if (!pattern.test(contents)) throw new Error(`Could not find ${label}`)
-  return contents.replace(pattern, replacement)
-}
-
 function updateJsonVersion(path, nextVersion) {
   const manifest = JSON.parse(readFileSync(path, 'utf8'))
   const previousVersion = manifest.version
   manifest.version = nextVersion
   writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`)
   return previousVersion
-}
-
-function updateClientVersion(path, nextVersion) {
-  const contents = readFileSync(path, 'utf8')
-  writeFileSync(
-    path,
-    replaceOnce(
-      contents,
-      /const CLIENT_VERSION = '\d+\.\d+\.\d+'/,
-      `const CLIENT_VERSION = '${nextVersion}'`,
-      `${path} CLIENT_VERSION`,
-    ),
-  )
 }
 
 const options = parseArgs(process.argv.slice(2))
@@ -104,8 +86,5 @@ const codexManifestPath = join(options.root, '.codex-plugin', 'plugin.json')
 if (existsSync(codexManifestPath)) {
   updateJsonVersion(codexManifestPath, nextVersion)
 }
-updateClientVersion(join(options.root, 'hooks', 'stop-hook.mjs'), nextVersion)
-updateClientVersion(join(options.root, 'hooks', 'ask-user-question-hook.mjs'), nextVersion)
-updateClientVersion(join(options.root, 'scripts', 'predict-interview-answer.mjs'), nextVersion)
 
 console.log(`clone plugin version: ${previousVersion} -> ${nextVersion}`)

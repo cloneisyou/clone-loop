@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { formatIterationPromptLine } from './clone-display.mjs'
+import { claudeDir, loopHistoryPath, loopStatePath } from './clone-paths.mjs'
+import { isIntegerString, isThreshold, nowIso, quoteYaml } from './clone-utils.mjs'
 
 const args = process.argv.slice(2)
 const promptParts = []
 let maxIterations = '0'
 let cloneThreshold = '0.6'
 let cloneAgent = process.env.CODEX_THREAD_ID ? 'Codex Clone Loop' : 'Claude Code Clone Loop'
-const ANSI_BOLD = '\u001b[1m'
-const ANSI_PURPLE = '\u001b[35m'
-const ANSI_RESET = '\u001b[0m'
 
 function usage() {
   console.log(`Clone Loop - iterative development loop with Clone-predicted next prompts
@@ -43,33 +42,6 @@ function fail(message) {
   process.exit(1)
 }
 
-function isThreshold(value) {
-  return /^(0(\.[0-9]+)?|1(\.0+)?)$/.test(value)
-}
-
-function quoteYaml(value) {
-  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-}
-
-function purple(value) {
-  return `${ANSI_PURPLE}${value}${ANSI_RESET}`
-}
-
-function purpleBold(value) {
-  return `${ANSI_BOLD}${ANSI_PURPLE}${value}${ANSI_RESET}`
-}
-
-function formatIterationPromptLine({ iteration, prompt }) {
-  const [firstLine = '', ...remainingLines] = String(prompt || '')
-    .trim()
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-  const continuation = remainingLines.length
-    ? `\n${remainingLines.map((line) => purpleBold(`> ${line}`)).join('\n')}`
-    : ''
-  return `${purpleBold(`Iteration ${iteration} : ${firstLine}`)}${continuation}`
-}
-
 for (let index = 0; index < args.length;) {
   const arg = args[index]
   if (arg === '-h' || arg === '--help') {
@@ -79,7 +51,7 @@ for (let index = 0; index < args.length;) {
 
   if (arg === '--max-iterations') {
     const value = args[index + 1]
-    if (!value || !/^[0-9]+$/.test(value)) {
+    if (!value || !isIntegerString(value)) {
       fail('Error: --max-iterations requires a positive integer or 0.')
     }
     maxIterations = value
@@ -119,10 +91,10 @@ if (!prompt) {
 }
 
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID || ''
-const claudeDir = join(process.cwd(), '.claude')
-mkdirSync(claudeDir, { recursive: true })
+const root = process.cwd()
+mkdirSync(claudeDir(root), { recursive: true })
 
-const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+const startedAt = nowIso()
 const state = `---
 active: true
 iteration: 1
@@ -136,11 +108,11 @@ started_at: "${startedAt}"
 ${prompt}
 `
 
-writeFileSync(join(claudeDir, 'clone-loop.local.md'), state)
+writeFileSync(loopStatePath(root), state)
 
 try {
   appendFileSync(
-    join(claudeDir, 'clone-loop.history.local.jsonl'),
+    loopHistoryPath(root),
     `${JSON.stringify({
       ts: startedAt,
       event: 'loop-start',
