@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { withCloneMcpServer } from './helpers/clone-mcp-server.mjs'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'hooks', 'ask-user-question-hook.mjs')
@@ -123,65 +124,17 @@ function runHook(workdir, endpoint, toolInput, options = {}) {
 }
 
 async function withMcpServer(predictions, callback) {
-  const calls = []
   const queue = Array.isArray(predictions) ? [...predictions] : [predictions]
   let recordPromptCount = 0
-  const server = createServer(async (req, res) => {
-    let body = ''
-    req.setEncoding('utf8')
-    for await (const chunk of req) body += chunk
-    const payload = JSON.parse(body)
-    calls.push({ method: payload.method, params: payload.params, headers: req.headers })
-
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'text/event-stream')
-    if (payload.method === 'initialize') {
-      res.setHeader('mcp-session-id', 'mcp-session-123')
-      res.end(
-        `data: ${JSON.stringify({
-          jsonrpc: '2.0',
-          id: payload.id,
-          result: { serverInfo: { name: 'clone', version: 'test' }, capabilities: {} },
-        })}\n\n`,
-      )
-      return
-    }
-
-    assert.equal(payload.method, 'tools/call')
-    assert.ok(req.headers['mcp-session-id'])
-    const toolName = payload.params?.name
-    let responseBody
-    if (toolName === 'predict_next_prompt') {
-      responseBody = queue.shift()
-    } else if (toolName === 'submit_feedback') {
-      responseBody = { ok: true }
-    } else if (toolName === 'record_agent_prompt') {
-      recordPromptCount += 1
-      responseBody = { event_id: `ask-prompt-event-${recordPromptCount}` }
-    } else {
-      throw new Error(`Unexpected tool call: ${toolName}`)
-    }
-    if (responseBody?.mcp_session_id) {
-      res.setHeader('mcp-session-id', responseBody.mcp_session_id)
-    }
-    res.end(
-      `data: ${JSON.stringify({
-        jsonrpc: '2.0',
-        id: payload.id,
-        result: {
-          content: [{ type: 'text', text: JSON.stringify(responseBody) }],
-        },
-      })}\n\n`,
-    )
-  })
-
-  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
-  const { port } = server.address()
-  try {
-    return await callback(`http://127.0.0.1:${port}/mcp`, calls)
-  } finally {
-    await new Promise((resolveClose) => server.close(resolveClose))
-  }
+  return withCloneMcpServer(
+    {
+      predict_next_prompt: () => queue.shift(),
+      submit_feedback: () => ({ ok: true }),
+      record_agent_prompt: () => ({ event_id: `ask-prompt-event-${++recordPromptCount}` }),
+    },
+    callback,
+    { sessionId: 'mcp-session-123' },
+  )
 }
 
 async function withFailingMcpServer(callback) {

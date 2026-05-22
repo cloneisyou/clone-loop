@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
-import { createServer } from 'node:http'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { withCloneMcpServer } from './helpers/clone-mcp-server.mjs'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const hookPath = join(pluginRoot, 'hooks', 'stop-hook.mjs')
@@ -142,65 +142,19 @@ function runHook(workdir, endpoint, options = {}) {
 }
 
 async function withMcpServer(prediction, callback) {
-  const calls = []
   let responseCount = 0
   let promptCount = 0
-  const server = createServer(async (req, res) => {
-    let body = ''
-    req.setEncoding('utf8')
-    for await (const chunk of req) body += chunk
-    const payload = JSON.parse(body)
-    calls.push({ method: payload.method, params: payload.params, headers: req.headers })
-
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'text/event-stream')
-    if (payload.method === 'initialize') {
-      res.setHeader('mcp-session-id', 'mcp-session-123')
-      res.end(
-        `data: ${JSON.stringify({
-          jsonrpc: '2.0',
-          id: payload.id,
-          result: { serverInfo: { name: 'clone', version: 'test' }, capabilities: {} },
-        })}\n\n`,
-      )
-      return
-    }
-
-    assert.equal(payload.method, 'tools/call')
-    assert.ok(req.headers['mcp-session-id'])
-    const toolName = payload.params?.name
-    let responseBody
-    if (toolName === 'predict_next_prompt') {
-      responseBody = prediction
-    } else if (toolName === 'record_agent_response') {
-      responseCount += 1
-      responseBody = { event_id: `response-event-${responseCount}` }
-    } else if (toolName === 'record_agent_prompt') {
-      promptCount += 1
-      responseBody = { event_id: `prompt-event-${promptCount}` }
-    } else if (toolName === 'submit_feedback' || toolName === 'stop_session') {
-      responseBody = { ok: true }
-    } else {
-      throw new Error(`Unexpected tool call: ${toolName}`)
-    }
-    res.end(
-      `data: ${JSON.stringify({
-        jsonrpc: '2.0',
-        id: payload.id,
-        result: {
-          content: [{ type: 'text', text: JSON.stringify(responseBody) }],
-        },
-      })}\n\n`,
-    )
-  })
-
-  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
-  const { port } = server.address()
-  try {
-    return await callback(`http://127.0.0.1:${port}/mcp`, calls)
-  } finally {
-    await new Promise((resolveClose) => server.close(resolveClose))
-  }
+  return withCloneMcpServer(
+    {
+      predict_next_prompt: () => prediction,
+      record_agent_response: () => ({ event_id: `response-event-${++responseCount}` }),
+      record_agent_prompt: () => ({ event_id: `prompt-event-${++promptCount}` }),
+      submit_feedback: () => ({ ok: true }),
+      stop_session: () => ({ ok: true }),
+    },
+    callback,
+    { sessionId: 'mcp-session-123' },
+  )
 }
 
 describe('Clone Loop v2 stop hook', () => {

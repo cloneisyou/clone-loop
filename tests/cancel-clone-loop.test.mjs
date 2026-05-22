@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
-import { createServer } from 'node:http'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { withCloneMcpServer } from './helpers/clone-mcp-server.mjs'
 
 const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const scriptPath = join(pluginRoot, 'scripts', 'cancel-clone-loop.mjs')
@@ -104,36 +104,18 @@ Original task
 `,
       )
 
-      const calls = []
-      const server = createServer(async (req, res) => {
-        let body = ''
-        req.setEncoding('utf8')
-        for await (const chunk of req) body += chunk
-        const payload = JSON.parse(body)
-        calls.push({ method: payload.method, params: payload.params, headers: req.headers })
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/event-stream')
-        res.end(
-          `data: ${JSON.stringify({
-            jsonrpc: '2.0',
-            id: payload.id,
-            result: { content: [{ type: 'text', text: JSON.stringify({ ok: true }) }] },
-          })}\n\n`,
-        )
-      })
-      await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
-      const { port } = server.address()
-      try {
-        const result = await runCancelAsync(workdir, { CLONE_MCP_URL: `http://127.0.0.1:${port}/mcp` })
+      await withCloneMcpServer(
+        { stop_session: () => ({ ok: true }) },
+        async (endpoint, calls) => {
+          const result = await runCancelAsync(workdir, { CLONE_MCP_URL: endpoint })
 
-        assert.equal(result.status, 0, JSON.stringify(result))
-        const stopCall = calls.find((call) => call.params?.name === 'stop_session')
-        assert.ok(stopCall)
-        assert.equal(stopCall.params.arguments.session_id, 'clone-sess-cancel')
-        assert.equal(existsSync(join(claudeDir, 'clone-loop.local.md')), false)
-      } finally {
-        await new Promise((resolveClose) => server.close(resolveClose))
-      }
+          assert.equal(result.status, 0, JSON.stringify(result))
+          const stopCall = calls.find((call) => call.params?.name === 'stop_session')
+          assert.ok(stopCall)
+          assert.equal(stopCall.params.arguments.session_id, 'clone-sess-cancel')
+          assert.equal(existsSync(join(claudeDir, 'clone-loop.local.md')), false)
+        },
+      )
     } finally {
       rmSync(workdir, { recursive: true, force: true })
     }
