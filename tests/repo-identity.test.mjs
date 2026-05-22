@@ -58,4 +58,12 @@ describe('repository identity', () => {
     assert.match(stopHook, /clientInfo: \{ name: 'clone-loop'/)
     assert.match(askHook, /clientInfo: \{ name: 'clone-loop'/)
   })
+
+  it('installer points users at the clone-loop GitHub star action', () => {
+    const installer = readFileSync(join(root, 'scripts', 'install.sh'), 'utf8')
+
+    assert.match(installer, /GITHUB_REPO="cloneisyou\/clone-loop"/)
+    assert.match(installer, /gh repo star "\$\{GITHUB_REPO\}"/)
+    assert.match(installer, /https:\/\/github\.com\/\$\{GITHUB_REPO\}/)
+  })
 })

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+GITHUB_REPO="cloneisyou/clone-loop"
+
 if command -v claude >/dev/null 2>&1; then
   CLAUDE_BIN="claude"
 elif command -v claude.exe >/dev/null 2>&1; then
@@ -13,7 +15,7 @@ fi
 
 echo "Installing Clone with ${CLAUDE_BIN}..."
 
-if ! "${CLAUDE_BIN}" plugin marketplace add cloneisyou/clone-loop@main; then
+if ! "${CLAUDE_BIN}" plugin marketplace add "${GITHUB_REPO}@main"; then
   echo "Marketplace add did not complete; refreshing clone-loop if it already exists."
   "${CLAUDE_BIN}" plugin marketplace update clone-loop || true
 fi
@@ -21,6 +23,32 @@ fi
 if ! "${CLAUDE_BIN}" plugin install clone@clone-loop --scope user; then
   echo "Install did not complete; trying plugin update for an existing install."
   "${CLAUDE_BIN}" plugin update clone@clone-loop
+fi
+
+echo
+if command -v gh >/dev/null 2>&1; then
+  if [ -t 0 ]; then
+    printf "Star %s on GitHub now? [Y/n] " "${GITHUB_REPO}"
+    read -r STAR_REPLY || STAR_REPLY=""
+    case "${STAR_REPLY:-Y}" in
+      n|N|no|NO|No)
+        echo "Star later: gh repo star ${GITHUB_REPO}"
+        ;;
+      *)
+        if gh repo star "${GITHUB_REPO}" >/dev/null 2>&1; then
+          echo "Starred ${GITHUB_REPO}."
+        else
+          echo "Could not star automatically. Run: gh repo star ${GITHUB_REPO}"
+        fi
+        ;;
+    esac
+  else
+    echo "Star Clone Loop on GitHub:"
+    echo "  gh repo star ${GITHUB_REPO}"
+  fi
+else
+  echo "Star Clone Loop on GitHub:"
+  echo "  https://github.com/${GITHUB_REPO}"
 fi
 
 cat <<'NEXT'

@@ -2,7 +2,7 @@
   <img src="assets/clone-logo-spin-transparent.gif" alt="Clone logo spinning" width="180">
   <br/>
   <br/>
-  <strong>C L O N E</strong>
+  <strong>C L O N E - L O O P</strong>
   <br/><br/>
   <strong>Keep Agent working, with predicted next prompts.</strong>
   <br/>
