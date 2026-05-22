@@ -1,6 +1,28 @@
-# Clone
+<p align="center">
+  <br/>
+  <strong>C L O N E</strong>
+  <br/><br/>
+  <strong>Keep Agent working, with predicted next prompts.</strong>
+  <br/>
+  <sub>A Claude Code plugin for self-driving coding loops powered by Clone MCP.</sub>
+</p>
 
-**Keep Claude Code working — even when it wants to stop.**
+<p align="center">
+  <a href="https://github.com/cloneisyou/clone-claude-plugin/tags">
+    <img src="https://img.shields.io/github/v/tag/cloneisyou/clone-claude-plugin?filter=clone-plugin-v*&label=version" alt="Version">
+  </a>
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-6f42c1" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/Clone%20MCP-next--prompt-0ea5e9" alt="Clone MCP">
+  <img src="https://img.shields.io/github/license/cloneisyou/clone-claude-plugin?color=green" alt="License">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#how-it-works">How It Works</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#api-key">API Key</a> ·
+  <a href="#pinning-a-version">Versions</a>
+</p>
 
 Clone is a Claude Code plugin that turns any task into a self-driving loop.
 When Claude tries to stop, Clone predicts your most likely next prompt and
@@ -27,12 +49,33 @@ Then walk away.
 
 ## Quick start
 
+Paste this into your agent after install:
+
+```text
+/clone:loop "Run tests and fix any failures" --max-iterations 5
+```
+
+Install - one command, Claude CLI auto-detected:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cloneisyou/clone-claude-plugin/main/scripts/install.sh | bash
+```
+
+Or install manually from your shell:
+
 ```bash
 claude plugin marketplace add cloneisyou/clone-claude-plugin@main
 claude plugin install clone@clone-labs --scope user
 ```
 
-Inside Claude Code:
+PowerShell:
+
+```powershell
+claude.exe plugin marketplace add cloneisyou/clone-claude-plugin@main
+claude.exe plugin install clone@clone-labs --scope user
+```
+
+Open your agent and run:
 
 ```text
 /clone:api-key status
