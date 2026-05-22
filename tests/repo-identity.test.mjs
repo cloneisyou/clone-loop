@@ -59,11 +59,12 @@ describe('repository identity', () => {
     assert.match(askHook, /clientInfo: \{ name: 'clone-loop'/)
   })
 
-  it('installer points users at the clone-loop GitHub star action', () => {
+  it('installer can automatically star clone-loop through GitHub CLI', () => {
     const installer = readFileSync(join(root, 'scripts', 'install.sh'), 'utf8')
 
     assert.match(installer, /GITHUB_REPO="cloneisyou\/clone-loop"/)
+    assert.match(installer, /read -r STAR_REPLY < \/dev\/tty/)
     assert.match(installer, /gh repo star "\$\{GITHUB_REPO\}"/)
-    assert.match(installer, /https:\/\/github\.com\/\$\{GITHUB_REPO\}/)
+    assert.doesNotMatch(installer, /echo "  gh repo star/)
   })
 })
