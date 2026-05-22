@@ -52,6 +52,9 @@ describe('release automation', () => {
   it('creates patch releases and commits both plugin manifests', () => {
     const workflow = readFileSync(join(root, '.github', 'workflows', 'release-plugin.yml'), 'utf8')
 
+    assert.match(workflow, /uses: actions\/checkout@v5/)
+    assert.match(workflow, /uses: actions\/setup-node@v5/)
+    assert.match(workflow, /node-version: 24/)
     assert.match(workflow, /Bump patch version/)
     assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
     assert.match(workflow, /TAG="clone--v\$\{VERSION\}"/)
