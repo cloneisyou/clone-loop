@@ -65,7 +65,6 @@ function numericConfidence(value, fallback = 0) {
 }
 
 function chooseHighestConfidenceOption(prediction, options) {
-  const labels = options.map((option) => String(option?.label || '').trim()).filter(Boolean)
   const rankedCandidates = rankedPredictionCandidates(prediction)
   const mapped = []
 
@@ -76,13 +75,7 @@ function chooseHighestConfidenceOption(prediction, options) {
   }
 
   if (mapped.length) return mapped[0]
-
-  return {
-    answer: labels[0] || null,
-    confidence: rankedCandidates[0]?.confidence ?? 0,
-    text: rankedCandidates[0]?.text || '',
-    fallback: true,
-  }
+  return null
 }
 
 function formatOptions(options) {
@@ -203,7 +196,7 @@ function allowAnswer({ toolInput, answers, confidence, threshold }) {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',
-          permissionDecisionReason: `Clone answered AskUserQuestion with a free-form predicted response. Confidence ${confidence}; threshold ${threshold} is advisory for questions.`,
+          permissionDecisionReason: `Clone answered AskUserQuestion with a predicted response. Confidence ${confidence}; threshold ${threshold}.`,
           updatedInput: {
             ...toolInput,
             questions: toolInput.questions,
@@ -220,14 +213,17 @@ function allowAnswer({ toolInput, answers, confidence, threshold }) {
   )
 }
 
-async function safeReject({ predictionId, mcpSessionId }) {
-  if (!predictionId) return
-  try {
-    await submitFeedback({ predictionId, status: 'rejected', mcpSessionId })
-    appendHistory({ event: 'feedback-sent', source: 'ask-user-question', prediction_id: predictionId, status: 'rejected' })
-  } catch (error) {
-    appendHistory({ event: 'feedback-sent', source: 'ask-user-question', prediction_id: predictionId, status: 'rejected', error: error?.message || String(error) })
-  }
+function deferQuestion({ decision, question, threshold, prediction, confidence, error }) {
+  appendHistory({
+    event: 'ask-user-question',
+    decision,
+    question,
+    threshold: Number(threshold),
+    confidence: confidence == null ? null : Number(confidence),
+    prediction_id: prediction?.id || null,
+    status: prediction?.status || null,
+    error: error ? error?.message || String(error) : undefined,
+  })
 }
 
 async function main() {
@@ -293,25 +289,22 @@ async function main() {
         mcpSessionId: mcpSessionIdInitial,
       })
     } catch (error) {
-      const fallbackAnswer = String(options[0]?.label || '').trim()
-      if (fallbackAnswer) {
-        answers[questionText] = fallbackAnswer
-        confidenceValues.push(0)
-        appendHistory({
-          event: 'ask-user-question',
-          decision: 'auto-answer-fallback-mcp-error',
-          question: questionText,
-          answer: fallbackAnswer,
-          error: error?.message || String(error),
-        })
-        continue
-      }
-
-      appendHistory({
-        event: 'ask-user-question',
+      deferQuestion({
         decision: 'defer-mcp-error',
         question: questionText,
-        error: error?.message || String(error),
+        threshold: cloneThreshold,
+        error,
+      })
+      return
+    }
+
+    if (prediction?.status !== 'auto') {
+      deferQuestion({
+        decision: 'defer-non-auto',
+        question: questionText,
+        threshold: cloneThreshold,
+        prediction,
+        confidence: prediction.confidence,
       })
       return
     }
@@ -326,16 +319,25 @@ async function main() {
         }
       : chooseHighestConfidenceOption(prediction, options)
 
-    if (!selection.answer) {
-      appendHistory({
-        event: 'ask-user-question',
-        decision: 'defer-no-options',
+    if (!selection?.answer) {
+      deferQuestion({
+        decision: 'defer-unmapped',
         question: questionText,
-        threshold: Number(cloneThreshold),
-        prediction_id: prediction.id || null,
-        status: prediction.status || null,
+        threshold: cloneThreshold,
+        prediction,
+        confidence: prediction?.confidence,
       })
-      await safeReject({ predictionId: prediction.id, mcpSessionId: mcpSessionIdInitial })
+      return
+    }
+
+    if (!(Number.isFinite(Number(selection.confidence)) && Number(selection.confidence) >= Number(cloneThreshold))) {
+      deferQuestion({
+        decision: 'defer-low-confidence',
+        question: questionText,
+        threshold: cloneThreshold,
+        prediction,
+        confidence: selection.confidence,
+      })
       return
     }
 

@@ -231,7 +231,7 @@ describe('AskUserQuestion PreToolUse hook', () => {
         const output = JSON.parse(result.stdout)
         assert.equal(output.hookSpecificOutput.hookEventName, 'PreToolUse')
         assert.equal(output.hookSpecificOutput.permissionDecision, 'allow')
-        assert.match(output.hookSpecificOutput.permissionDecisionReason, /free-form predicted response/)
+        assert.match(output.hookSpecificOutput.permissionDecisionReason, /predicted response/)
         assert.deepEqual(output.hookSpecificOutput.updatedInput, {
           questions: toolInput.questions,
           answers: {
@@ -266,13 +266,13 @@ describe('AskUserQuestion PreToolUse hook', () => {
     )
   })
 
-  it('answers with the free-form predicted response even when confidence is low or status is not auto', async () => {
+  it('does not answer when confidence is below threshold or status is not auto', async () => {
     writeState(workdir)
 
     await withMcpServer(
       {
-        id: 'question-prediction-2',
-        status: 'escalated',
+        id: 'question-prediction-2-low',
+        status: 'auto',
         threshold: 0.6,
         predicted_response: 'I would run the focused tests before opening a PR.',
         confidence: 0.42,
@@ -283,8 +283,32 @@ describe('AskUserQuestion PreToolUse hook', () => {
         })
 
         assert.equal(result.status, 0)
-        const output = JSON.parse(result.stdout)
-        assert.equal(output.hookSpecificOutput.updatedInput.answers['Continue?'], 'I would run the focused tests before opening a PR.')
+        assert.equal(result.stdout, '')
+        const history = readFileSync(join(workdir, '.claude', 'clone-loop.history.local.jsonl'), 'utf8')
+        assert.match(history, /"decision":"defer-low-confidence"/)
+        assert.ok(readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
+      },
+    )
+
+    writeState(workdir)
+
+    await withMcpServer(
+      {
+        id: 'question-prediction-2-escalated',
+        status: 'escalated',
+        threshold: 0.6,
+        predicted_response: 'Open a PR.',
+        confidence: 0.91,
+      },
+      async (endpoint) => {
+        const result = await runHook(workdir, endpoint, {
+          questions: [{ question: 'Continue?', options: [{ label: 'Run tests' }, { label: 'Open PR' }] }],
+        })
+
+        assert.equal(result.status, 0)
+        assert.equal(result.stdout, '')
+        const history = readFileSync(join(workdir, '.claude', 'clone-loop.history.local.jsonl'), 'utf8')
+        assert.match(history, /"decision":"defer-non-auto"/)
         assert.ok(readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
       },
     )
@@ -322,18 +346,18 @@ describe('AskUserQuestion PreToolUse hook', () => {
     )
   })
 
-  it('falls back to the first option when neither free-form nor mapped candidate is available', async () => {
+  it('defers when neither free-form nor mapped candidate is available', async () => {
     writeState(workdir)
 
     await withMcpServer(
       {
         id: 'question-prediction-4',
-        status: 'escalated',
+        status: 'auto',
         threshold: 0.6,
-        confidence: 0.21,
+        confidence: 0.91,
         candidates: [
-          { predicted_response: 'Use the default option', confidence: 0.21 },
-          { predicted_response: 'Whatever is safest', confidence: 0.18 },
+          { predicted_response: 'Use the default option', confidence: 0.91 },
+          { predicted_response: 'Whatever is safest', confidence: 0.88 },
         ],
       },
       async (endpoint) => {
@@ -347,13 +371,15 @@ describe('AskUserQuestion PreToolUse hook', () => {
         })
 
         assert.equal(result.status, 0)
-        const output = JSON.parse(result.stdout)
-        assert.equal(output.hookSpecificOutput.updatedInput.answers['Which option?'], 'Default fast path')
+        assert.equal(result.stdout, '')
+        const history = readFileSync(join(workdir, '.claude', 'clone-loop.history.local.jsonl'), 'utf8')
+        assert.match(history, /"decision":"defer-unmapped"/)
+        assert.ok(readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
       },
     )
   })
 
-  it('falls back to the first option instead of asking the user when Clone MCP fails', async () => {
+  it('defers instead of choosing the first option when Clone MCP fails', async () => {
     writeState(workdir)
 
     await withFailingMcpServer(async (endpoint) => {
@@ -367,8 +393,10 @@ describe('AskUserQuestion PreToolUse hook', () => {
       })
 
       assert.equal(result.status, 0)
-      const output = JSON.parse(result.stdout)
-      assert.equal(output.hookSpecificOutput.updatedInput.answers['Which option?'], 'Run focused tests')
+      assert.equal(result.stdout, '')
+      const history = readFileSync(join(workdir, '.claude', 'clone-loop.history.local.jsonl'), 'utf8')
+      assert.match(history, /"decision":"defer-mcp-error"/)
+      assert.ok(readFileSync(join(workdir, '.claude', 'clone-loop.local.md'), 'utf8'))
     })
   })
 
