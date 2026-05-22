@@ -12,11 +12,14 @@ const setupPath = join(pluginRoot, 'scripts', 'setup-clone-interview.mjs')
 function runInterview(workdir, args) {
   return spawnSync(process.execPath, [setupPath, ...args], {
     cwd: workdir,
-    env: {
-      ...process.env,
-      CLAUDE_PLUGIN_ROOT: pluginRoot,
-      PLUGIN_ROOT: pluginRoot,
-    },
+          env: {
+            ...process.env,
+            CLAUDE_PLUGIN_ROOT: pluginRoot,
+            PLUGIN_ROOT: pluginRoot,
+            CLAUDE_CODE_SESSION_ID: '',
+            CODEX_THREAD_ID: '',
+            CODEX_SESSION_ID: '',
+          },
     encoding: 'utf8',
   })
 }
@@ -36,6 +39,8 @@ describe('Clone Interview setup script', () => {
       assert.match(result.stdout, /Clone Interview started/)
       assert.match(result.stdout, /Mode: deep/)
       assert.match(result.stdout, /Max questions: 12/)
+      assert.match(result.stdout, /Clone threshold: 0\.75/)
+      assert.match(result.stdout, /Auto-answer: enabled/)
 
       const state = readFileSync(join(workdir, '.claude', 'clone-interview.local.md'), 'utf8')
       assert.match(state, /active: true/)
@@ -43,6 +48,9 @@ describe('Clone Interview setup script', () => {
       assert.match(state, /mode: "deep"/)
       assert.match(state, /max_questions: 12/)
       assert.match(state, /question_count: 0/)
+      assert.match(state, /clone_threshold: 0\.75/)
+      assert.match(state, /clone_agent: "Claude Code Clone Interview"/)
+      assert.match(state, /auto_answer: true/)
       assert.match(state, /output_path: "\.claude\/clone-interview\.local\.md"/)
       assert.match(state, /# Clone Interview/)
       assert.match(state, /\[from-code\]\[auto-confirmed\]/)
@@ -56,6 +64,9 @@ describe('Clone Interview setup script', () => {
       assert.equal(history[0].topic, 'Add billing to the app')
       assert.equal(history[0].mode, 'deep')
       assert.equal(history[0].max_questions, 12)
+      assert.equal(history[0].clone_threshold, 0.75)
+      assert.equal(history[0].clone_agent, 'Claude Code Clone Interview')
+      assert.equal(history[0].auto_answer, true)
     } finally {
       rmSync(workdir, { recursive: true, force: true })
     }
@@ -72,6 +83,11 @@ describe('Clone Interview setup script', () => {
         'quick',
         '--max-questions',
         '5',
+        '--clone-threshold',
+        '0.8',
+        '--clone-agent',
+        'Custom Interview Agent',
+        '--no-auto-answer',
         '--output',
         'docs/clone-interview/onboarding.md',
       ])
@@ -85,6 +101,9 @@ describe('Clone Interview setup script', () => {
       assert.match(state, /topic: "Improve onboarding"/)
       assert.match(state, /mode: "quick"/)
       assert.match(state, /max_questions: 5/)
+      assert.match(state, /clone_threshold: 0\.8/)
+      assert.match(state, /clone_agent: "Custom Interview Agent"/)
+      assert.match(state, /auto_answer: false/)
       assert.match(state, /output_path: "docs\/clone-interview\/onboarding\.md"/)
     } finally {
       rmSync(workdir, { recursive: true, force: true })
@@ -96,6 +115,7 @@ describe('Clone Interview setup script', () => {
       [['Feature', '--mode', 'medium'], /--mode must be quick or deep/],
       [['Feature', '--max-questions', '0'], /--max-questions requires a positive integer/],
       [['Feature', '--max-questions', 'abc'], /--max-questions requires a positive integer/],
+      [['Feature', '--clone-threshold', '1.1'], /--clone-threshold must be a number in \[0, 1\]/],
       [['--mode', 'deep'], /No topic provided/],
       [['Feature', '--output', '../outside.md'], /--output must stay inside the current project/],
     ]

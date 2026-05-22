@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/api-key-manager.test.mjs tests/setup-clone-loop.test.mjs tests/clone-interview-setup.test.mjs tests/clone-interview-plugin.test.mjs tests/post-tool-use-capture.test.mjs tests/repo-identity.test.mjs tests/codex-plugin.test.mjs tests/codex-setup.test.mjs tests/codex-post-tool-use.test.mjs tests/codex-stop-hook.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs tests/release-automation.test.mjs",
+    "test": "node --test tests/api-key-manager.test.mjs tests/setup-clone-loop.test.mjs tests/clone-interview-setup.test.mjs tests/clone-interview-predict.test.mjs tests/clone-interview-question-hook.test.mjs tests/clone-interview-plugin.test.mjs tests/post-tool-use-capture.test.mjs tests/repo-identity.test.mjs tests/codex-plugin.test.mjs tests/codex-setup.test.mjs tests/codex-post-tool-use.test.mjs tests/codex-stop-hook.test.mjs tests/stop-hook-v2.test.mjs tests/ask-user-question-hook.test.mjs tests/release-automation.test.mjs",
     "test:mcp:e2e": "node --test tests/remote-mcp-e2e.test.mjs"
   }
 }

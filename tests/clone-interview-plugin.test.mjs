@@ -17,6 +17,7 @@ describe('Clone Interview plugin surface', () => {
     assert.match(command, /description: "Clarify requirements into a Clone Interview spec"/)
     assert.match(command, /argument-hint: "TOPIC \[--max-questions N\] \[--mode quick\|deep\] \[--output PATH\]"/)
     assert.match(command, /setup-clone-interview\.mjs/)
+    assert.match(command, /AskUserQuestion/)
     assert.match(command, /Ask one question at a time/)
     assert.match(command, /one-sentence goal/)
   })
@@ -28,21 +29,26 @@ describe('Clone Interview plugin surface', () => {
     const skill = read('skills/clone-interview/SKILL.md')
     assert.match(skill, /name: clone-interview/)
     assert.match(skill, /setup-clone-interview\.mjs/)
+    assert.match(skill, /predict-interview-answer\.mjs/)
     assert.match(skill, /Inspect repository facts first/)
-    assert.match(skill, /Ask the user for goals/)
-    assert.match(skill, /Clone Interview v1 is plugin-only/)
+    assert.match(skill, /decision: "auto"/)
+    assert.match(skill, /decision: "escalate"/)
+    assert.match(skill, /plugin-only for question generation/)
   })
 
-  it('documents Clone Interview in help, README, and Codex default prompts', () => {
+  it('documents Clone Interview in help, README, hooks, and Codex default prompts', () => {
     const claudeHelp = read('commands/help.md')
     const codexHelp = read('skills/clone-help/SKILL.md')
     const readme = read('README.md')
+    const hooks = read('hooks/hooks.json')
     const codexManifest = JSON.parse(read('.codex-plugin/plugin.json'))
 
     assert.match(claudeHelp, /\/clone:interview/)
     assert.match(codexHelp, /clone-interview/)
+    assert.match(hooks, /interview-question-hook\.mjs/)
     assert.match(readme, /\/clone:interview "<topic>"/)
     assert.match(readme, /Clone Interview is the requirements side of Clone/)
+    assert.match(readme, /Low-confidence questions escalate to you/)
     assert.ok(
       codexManifest.interface.defaultPrompt.some((prompt) => /Clone Interview/.test(prompt)),
       'Codex default prompts mention Clone Interview',

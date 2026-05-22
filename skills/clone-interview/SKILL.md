@@ -19,7 +19,9 @@ Interview rules:
 
 - Inspect repository facts first for the topic, including stack, file structure, existing patterns, and relevant tests.
 - Auto-confirm only exact repo facts, and write them into the spec as `[from-code][auto-confirmed]`.
-- Ask the user for goals, audience, scope, non-goals, product tradeoffs, business logic, acceptance criteria, constraints, and verification.
+- Before asking the user for goals, audience, scope, non-goals, product tradeoffs, business logic, acceptance criteria, constraints, or verification, run `scripts/predict-interview-answer.mjs` with the question.
+- If the script returns `decision: "auto"`, record the predicted answer in the spec and keep interviewing.
+- If the script returns `decision: "escalate"`, ask the user directly and record the user's answer.
 - Ask one question at a time.
 - For free-form answers that carry scope or constraints, structure the answer and confirm nothing was lost before recording it.
 - In `quick` mode, close goal, output, and acceptance criteria.
@@ -31,5 +33,7 @@ Supported options:
 - `--max-questions <n>`: maximum interview questions before restating, default `12`.
 - `--mode <quick|deep>`: interview depth, default `deep`.
 - `--output <path>`: project-local markdown spec path, default `.claude/clone-interview.local.md`.
+- `--clone-threshold <n>`: confidence threshold for Clone auto-answers, default `0.75`.
+- `--no-auto-answer`: disable Clone-predicted answers and always ask the user.
 
-Clone Interview v1 is plugin-only. Do not call Clone MCP as an interview question generator unless a future Clone MCP interview tool is explicitly available.
+Clone Interview v1 is plugin-only for question generation. The agent generates interview questions; Clone MCP predicts how the user would answer and gates auto-answering by confidence. Do not call Clone MCP as an interview question generator unless a future Clone MCP interview tool is explicitly available.

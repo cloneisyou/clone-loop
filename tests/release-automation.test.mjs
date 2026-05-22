@@ -31,6 +31,7 @@ describe('release automation', () => {
       )
       writeFixture(fixtureRoot, 'hooks/stop-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
       writeFixture(fixtureRoot, 'hooks/ask-user-question-hook.mjs', "const CLIENT_VERSION = '0.2.7'\n")
+      writeFixture(fixtureRoot, 'scripts/predict-interview-answer.mjs', "const CLIENT_VERSION = '0.2.7'\n")
 
       const result = spawnSync(
         process.execPath,
@@ -43,6 +44,7 @@ describe('release automation', () => {
       assert.equal(JSON.parse(readFileSync(join(fixtureRoot, '.codex-plugin/plugin.json'), 'utf8')).version, '0.2.8')
       assert.match(readFileSync(join(fixtureRoot, 'hooks/stop-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
       assert.match(readFileSync(join(fixtureRoot, 'hooks/ask-user-question-hook.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
+      assert.match(readFileSync(join(fixtureRoot, 'scripts/predict-interview-answer.mjs'), 'utf8'), /CLIENT_VERSION = '0\.2\.8'/)
       assert.match(result.stdout, /0\.2\.7 -> 0\.2\.8/)
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true })
@@ -59,5 +61,6 @@ describe('release automation', () => {
     assert.match(workflow, /node scripts\/bump-plugin-version\.mjs --part patch/)
     assert.match(workflow, /TAG="clone--v\$\{VERSION\}"/)
     assert.match(workflow, /git add .*\.claude-plugin\/plugin\.json .*\.codex-plugin\/plugin\.json/)
+    assert.match(workflow, /git add .*scripts\/predict-interview-answer\.mjs/)
   })
 })

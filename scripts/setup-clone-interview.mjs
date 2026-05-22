@@ -8,6 +8,9 @@ const topicParts = []
 let maxQuestions = '12'
 let mode = 'deep'
 let outputPath = '.claude/clone-interview.local.md'
+let cloneThreshold = '0.75'
+let cloneAgent = process.env.CODEX_THREAD_ID ? 'Codex Clone Interview' : 'Claude Code Clone Interview'
+let autoAnswer = true
 
 function usage() {
   console.log(`Clone Interview - clarify requirements into a local spec
@@ -22,6 +25,9 @@ OPTIONS:
   --max-questions <n>    Maximum interview questions before restating (default: 12)
   --mode <quick|deep>    Interview depth (default: deep)
   --output <path>        Markdown spec path (default: .claude/clone-interview.local.md)
+  --clone-threshold <n>  Confidence threshold for Clone auto-answers (default: 0.75)
+  --clone-agent <text>   Agent label sent to Clone (default: Claude Code Clone Interview)
+  --no-auto-answer       Disable Clone-predicted interview answers
   -h, --help             Show this help message
 
 DESCRIPTION:
@@ -46,6 +52,10 @@ function quoteYaml(value) {
 
 function isPositiveInteger(value) {
   return /^[1-9][0-9]*$/.test(String(value || ''))
+}
+
+function isThreshold(value) {
+  return /^(0(\.[0-9]+)?|1(\.0+)?)$/.test(value)
 }
 
 function projectLocalPath(path) {
@@ -93,6 +103,30 @@ for (let index = 0; index < args.length;) {
     continue
   }
 
+  if (arg === '--clone-threshold') {
+    const value = args[index + 1]
+    if (!value || !isThreshold(value)) {
+      fail('Error: --clone-threshold must be a number in [0, 1].')
+    }
+    cloneThreshold = value
+    index += 2
+    continue
+  }
+
+  if (arg === '--clone-agent') {
+    const value = args[index + 1]
+    if (!value) fail('Error: --clone-agent requires text.')
+    cloneAgent = value
+    index += 2
+    continue
+  }
+
+  if (arg === '--no-auto-answer') {
+    autoAnswer = false
+    index += 1
+    continue
+  }
+
   if (arg.startsWith('--')) {
     fail(`Error: Unknown option ${arg}.`)
   }
@@ -116,12 +150,17 @@ const output = projectLocalPath(outputPath)
 mkdirSync(dirname(output.resolved), { recursive: true })
 
 const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+const sessionId = process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID || ''
 const spec = `---
 active: true
 topic: ${quoteYaml(topic)}
 mode: ${quoteYaml(mode)}
 max_questions: ${maxQuestions}
 question_count: 0
+session_id: ${quoteYaml(sessionId)}
+clone_threshold: ${cloneThreshold}
+clone_agent: ${quoteYaml(cloneAgent)}
+auto_answer: ${autoAnswer ? 'true' : 'false'}
 started_at: ${quoteYaml(startedAt)}
 output_path: ${quoteYaml(output.display.replace(/\\/g, '/'))}
 ---
@@ -170,6 +209,8 @@ ${topic}
 
 - Inspect code first for factual questions about stack, existing patterns, and file structure.
 - Auto-confirm only exact repo facts, and mark them with \`[from-code][auto-confirmed]\`.
+- Before asking human-judgment questions, ask Clone to predict the user's answer when \`auto_answer\` is true.
+- Use Clone-predicted answers only when confidence is greater than or equal to \`clone_threshold\`; otherwise escalate to the user.
 - Ask the user for goals, scope, acceptance criteria, product tradeoffs, business logic, and non-goals.
 - Ask one question at a time.
 - Structure free-form answers that carry scope or constraints, then confirm nothing was lost before treating them as final.
@@ -190,6 +231,10 @@ appendFileSync(
     topic,
     mode,
     max_questions: Number(maxQuestions),
+    session_id: sessionId,
+    clone_threshold: Number(cloneThreshold),
+    clone_agent: cloneAgent,
+    auto_answer: autoAnswer,
     output_path: output.display.replace(/\\/g, '/'),
   })}\n`,
 )
@@ -199,6 +244,8 @@ console.log(`Clone Interview started.
 Topic: ${topic}
 Mode: ${mode}
 Max questions: ${maxQuestions}
+Clone threshold: ${cloneThreshold}
+Auto-answer: ${autoAnswer ? 'enabled' : 'disabled'}
 Spec: ${output.display.replace(/\\/g, '/')}
 State: .claude/clone-interview.local.md
 
