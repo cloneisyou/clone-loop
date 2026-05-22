@@ -64,17 +64,33 @@ function readHistoryRecords(historyPath) {
     })
 }
 
-function hasLoopStartForSession(historyPath, sessionId) {
-  return readHistoryRecords(historyPath).some((record) =>
+function recordsForSession(historyPath, sessionId) {
+  return readHistoryRecords(historyPath).filter((record) => {
+    const recordSession = stringValue(record.session_id)
+    return !recordSession || recordSession === sessionId
+  })
+}
+
+function hasLoopStartForSession(records, sessionId) {
+  return records.some((record) =>
     record.event === 'loop-start' && stringValue(record.session_id) === sessionId
   )
 }
 
-function isExpired(startedAt, ttlHours, nowMs) {
-  const startedMs = Date.parse(String(startedAt || ''))
-  if (!Number.isFinite(startedMs)) return true
+function lastActivityMs(records) {
+  let latest = 0
+  for (const record of records) {
+    const ts = Date.parse(String(record.ts || ''))
+    if (Number.isFinite(ts) && ts > latest) latest = ts
+  }
+  return latest
+}
+
+function isExpired(records, ttlHours, nowMs) {
+  const activityMs = lastActivityMs(records)
+  if (!activityMs) return true
   const ttlMs = Number(ttlHours) * 60 * 60 * 1000
-  return nowMs - startedMs > ttlMs
+  return nowMs - activityMs > ttlMs
 }
 
 export function validateActiveLoopState({
@@ -124,24 +140,31 @@ export function validateActiveLoopState({
     return { ok: false, reason: 'stale-session-state', state }
   }
 
-  if (isExpired(state.frontmatter.started_at, ttlHours, now.getTime())) {
-    appendLoopHistory(historyPath, {
-      ...staleBase,
-      decision: 'stale-expired-state',
-      started_at: state.frontmatter.started_at || null,
-      ttl_hours: Number(ttlHours),
-    })
-    if (removeStale) removeLoopState(statePath)
-    return { ok: false, reason: 'stale-expired-state', state }
-  }
+  const sessionRecords = recordsForSession(historyPath, currentSession)
 
-  if (!hasLoopStartForSession(historyPath, currentSession)) {
+  if (!hasLoopStartForSession(sessionRecords, currentSession)) {
     appendLoopHistory(historyPath, {
       ...staleBase,
       decision: 'stale-missing-loop-start',
     })
     if (removeStale) removeLoopState(statePath)
     return { ok: false, reason: 'stale-missing-loop-start', state }
+  }
+
+  if (isExpired(sessionRecords, ttlHours, now.getTime())) {
+    appendLoopHistory(historyPath, {
+      ...staleBase,
+      decision: 'stale-expired-state',
+      started_at: state.frontmatter.started_at || null,
+      last_activity_at: sessionRecords
+        .map((record) => String(record.ts || ''))
+        .filter(Boolean)
+        .sort()
+        .at(-1) || null,
+      ttl_hours: Number(ttlHours),
+    })
+    if (removeStale) removeLoopState(statePath)
+    return { ok: false, reason: 'stale-expired-state', state }
   }
 
   return { ok: true, state }

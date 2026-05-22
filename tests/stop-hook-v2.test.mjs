@@ -897,7 +897,48 @@ describe('Clone Loop v2 stop hook', () => {
     )
   })
 
-  it('removes stale loop state and does not continue after the TTL expires', async () => {
+  it('continues when started_at is old but recent loop activity exists', async () => {
+    writeState(workdir, { started_at: '2000-01-01T00:00:00Z' })
+    writeFileSync(
+      join(workdir, '.claude', 'clone-loop.history.local.jsonl'),
+      [
+        JSON.stringify({
+          ts: '2000-01-01T00:00:00Z',
+          event: 'loop-start',
+          session_id: 'session-123',
+        }),
+        JSON.stringify({
+          ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          event: 'post-tool-use',
+          session_id: 'session-123',
+          iteration: 1,
+          tool_name: 'Write',
+        }),
+      ].join('\n') + '\n',
+    )
+
+    await withMcpServer(
+      {
+        id: 'prediction-recent-activity',
+        status: 'auto',
+        threshold: 0.6,
+        predicted_response: 'Continue despite old start time.',
+        confidence: 0.99,
+        candidates: [],
+      },
+      async (endpoint, calls) => {
+        const result = await runHook(workdir, endpoint)
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        const output = JSON.parse(result.stdout)
+        assert.equal(output.decision, 'block')
+        assert.match(output.reason, /Continue despite old start time\./)
+        assert.ok(calls.length > 0)
+      },
+    )
+  })
+
+  it('removes stale loop state and does not continue after the activity TTL expires', async () => {
     writeState(workdir, { started_at: '2000-01-01T00:00:00Z' })
 
     await withMcpServer(
