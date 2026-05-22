@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { resolveCloneToken } from './clone-auth.mjs'
 import { appendLoopHistory, parseState } from './loop-state-guard.mjs'
 
-const CLIENT_VERSION = '0.14.4'
+const CLIENT_VERSION = '0.14.5'
 
 function readStdin() {
   return new Promise((resolveRead) => {
