@@ -238,6 +238,26 @@ describe('Clone API key manager', () => {
     })
   })
 
+  it('pings the Codex plugin card when Codex plugin data is injected', async () => {
+    await withMcpServer(async (mcpUrl, calls) => {
+      await withPluginDataAsync(async (pluginDataDir) => {
+        const token = 'clone_codex_connect_token_1234567890'
+        const result = await runManagerAsync(['set', token, '--connect'], {
+          env: {
+            CLONE_LOOP_AGENT_ID: 'codex',
+            PLUGIN_DATA: pluginDataDir,
+            CLONE_MCP_URL: mcpUrl,
+          },
+        })
+
+        assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+        assert.equal(calls[1].params.arguments.source_detail, 'clone-loop:codex')
+        assert.match(result.stdout, /Clone session: clone-session-123/)
+        assert.doesNotMatch(result.stdout, new RegExp(token))
+      })
+    })
+  })
+
   it('clears a plugin config token', () => {
     withPluginData((pluginDataDir) => {
       writeFileSync(

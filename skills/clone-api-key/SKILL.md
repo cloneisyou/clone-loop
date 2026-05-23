@@ -17,7 +17,10 @@ Supported subcommands:
 
 - `status`
 - `import-env`
+- `import-env --connect`
 - `set <key>`
+- `set <key> --connect`
+- `connect`
 - `clear`
 
 Never print the full token. Report only the masked token and active source: `environment`, `plugin config`, or `demo fallback`.
