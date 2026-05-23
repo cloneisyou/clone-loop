@@ -15,8 +15,29 @@ const args = process.argv.slice(2)
 const positionalArgs = args.filter((arg) => arg !== '--connect')
 const connectAfterStore = args.includes('--connect')
 const command = positionalArgs[0] || 'status'
-const CLONE_LOOP_SOURCE_DETAIL = 'clone-loop:claude-code'
 let handled = false
+
+function cloneLoopAgentId() {
+  const explicit = String(process.env.CLONE_LOOP_AGENT_ID || '').trim()
+  if (explicit) return explicit
+
+  if (process.env.CLAUDE_PLUGIN_DATA || process.env.CLAUDE_PLUGIN_ROOT) {
+    return 'claude-code'
+  }
+
+  const hasCodexPluginData = Boolean(process.env.PLUGIN_DATA) && !process.env.CLAUDE_PLUGIN_DATA
+  const hasCodexPluginRoot = Boolean(process.env.PLUGIN_ROOT) && !process.env.CLAUDE_PLUGIN_ROOT
+  const hasCodexRuntime =
+    Boolean(process.env.CODEX_HOME) ||
+    Boolean(process.env.CODEX_SESSION_ID) ||
+    Boolean(process.env.CODEX_THREAD_ID)
+
+  return hasCodexPluginData || hasCodexPluginRoot || hasCodexRuntime ? 'codex' : 'claude-code'
+}
+
+function cloneLoopSourceDetail() {
+  return `clone-loop:${cloneLoopAgentId()}`
+}
 
 function usage() {
   console.log(`Clone API key manager
@@ -79,7 +100,7 @@ async function startDashboardSession(token) {
       name: 'start_session',
       arguments: {
         source: 'agent',
-        source_detail: CLONE_LOOP_SOURCE_DETAIL,
+        source_detail: cloneLoopSourceDetail(),
       },
     },
     init.sessionId,
