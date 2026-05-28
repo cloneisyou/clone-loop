@@ -73,4 +73,10 @@ describe('repository identity', () => {
     assert.doesNotMatch(installer, /STAR_REPLY/)
     assert.doesNotMatch(installer, /echo "  gh repo star/)
   })
+
+  it('keeps shell installers LF-only so bash can parse them on every OS', () => {
+    const installer = readFileSync(join(root, 'scripts', 'install.sh'), 'utf8')
+
+    assert.doesNotMatch(installer, /\r\n/)
+  })
 })
