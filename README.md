@@ -66,24 +66,30 @@ Paste this into your agent after install:
 /clone:loop "Run tests and fix any failures" --max-iterations 5
 ```
 
-Install - one command, Claude CLI auto-detected:
+Install on macOS/Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cloneisyou/clone-loop/main/scripts/install.sh | bash
+```
+
+Install on Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/cloneisyou/clone-loop/main/scripts/install.ps1 | iex
 ```
 
 Or install manually from your shell:
 
 ```bash
 claude plugin marketplace add cloneisyou/clone-loop@main
-claude plugin install clone-loop@clone-labs --scope user
+claude plugin install clone-labs@clone-loop --scope user
 ```
 
 PowerShell:
 
 ```powershell
 claude.exe plugin marketplace add cloneisyou/clone-loop@main
-claude.exe plugin install clone-loop@clone-labs --scope user
+claude.exe plugin install clone-labs@clone-loop --scope user
 ```
 
 Open your agent and run:
@@ -101,7 +107,7 @@ Cancel anytime with `/clone:cancel-loop`.
 > For private memory and your own prediction quality, set `CLONE_API_TOKEN`
 > and run `/clone:api-key import-env`.
 
-To update later: `claude plugin marketplace update clone-labs && claude plugin update clone-loop@clone-labs`.
+To update later: `claude plugin marketplace update clone-loop && claude plugin update clone-labs@clone-loop`.
 
 ## Commands
 
@@ -288,7 +294,8 @@ equivalent AskUserQuestion tool hook event.
 ## Requirements
 
 Claude Code or Codex with plugin support, plus Node.js on `PATH`. Windows:
-PowerShell or cmd, no Git Bash needed.
+use PowerShell (`install.ps1`) or the manual `claude.exe` commands; Git Bash is
+not required.
 
 ## Development
 
@@ -304,7 +311,7 @@ claude plugin validate .
 > data against the demo fallback.
 
 > [!NOTE]
-> The `clone-labs` marketplace is hosted from this repo — not the official
+> The `clone-loop` marketplace is hosted from this repo — not the official
 > Anthropic `claude-plugins-official` marketplace.
 
 ## License
