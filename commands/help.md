@@ -74,12 +74,13 @@ Manage the Clone API key used by Clone Loop.
 
 ```bash
 /clone:api-key status
+/clone:api-key login
 /clone:api-key import-env
 /clone:api-key clear
 ```
 
 Token priority is nonblank `CLONE_API_TOKEN`, then plugin config, then demo fallback.
-Prefer `import-env` over `set <key>` because direct slash-command arguments can
+Prefer `login` for browser-based setup. Use `import-env` over `set <key>` because direct slash-command arguments can
 remain in the transcript.
 
 ### /clone:cancel-loop
