@@ -17,14 +17,18 @@ fi
 
 echo "Installing Clone with ${CLAUDE_BIN}..."
 
-if ! "${CLAUDE_BIN}" plugin marketplace add "${GITHUB_REPO}@main"; then
+run_claude() {
+  "${CLAUDE_BIN}" "$@" </dev/null
+}
+
+if ! run_claude plugin marketplace add "${GITHUB_REPO}@main"; then
   echo "Marketplace add did not complete; refreshing ${MARKETPLACE_NAME} if it already exists."
-  "${CLAUDE_BIN}" plugin marketplace update "${MARKETPLACE_NAME}" || true
+  run_claude plugin marketplace update "${MARKETPLACE_NAME}" || true
 fi
 
-if ! "${CLAUDE_BIN}" plugin install "${PLUGIN_REF}" --scope user; then
+if ! run_claude plugin install "${PLUGIN_REF}" --scope user; then
   echo "Install did not complete; trying plugin update for an existing install."
-  "${CLAUDE_BIN}" plugin update "${PLUGIN_REF}"
+  run_claude plugin update "${PLUGIN_REF}"
 fi
 
 echo
