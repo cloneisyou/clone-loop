@@ -40,13 +40,13 @@ describe('repository identity', () => {
     assert.doesNotMatch(haystack, new RegExp(escapeRegExp(oldRawRepo)))
   })
 
-  it('publishes the Claude plugin as clone-loop in the clone-labs marketplace', () => {
+  it('publishes the Claude plugin as clone-labs in the clone-loop marketplace', () => {
     const marketplace = JSON.parse(readFileSync(join(root, '.claude-plugin', 'marketplace.json'), 'utf8'))
     const manifest = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'))
 
-    assert.equal(marketplace.name, 'clone-labs')
-    assert.equal(marketplace.plugins[0].name, 'clone-loop')
-    assert.equal(manifest.name, 'clone-loop')
+    assert.equal(marketplace.name, 'clone-loop')
+    assert.equal(marketplace.plugins[0].name, 'clone-labs')
+    assert.equal(manifest.name, 'clone-labs')
   })
 
   it('uses clone-loop for package and Clone MCP client identity', () => {
@@ -66,12 +66,18 @@ describe('repository identity', () => {
 
   it('installer can automatically star clone-loop through GitHub CLI', () => {
     const installer = readFileSync(join(root, 'scripts', 'install.sh'), 'utf8')
+    const powershellInstaller = readFileSync(join(root, 'scripts', 'install.ps1'), 'utf8')
 
     assert.match(installer, /GITHUB_REPO="cloneisyou\/clone-loop"/)
+    assert.match(installer, /PLUGIN_REF="clone-labs@clone-loop"/)
+    assert.match(installer, /plugin marketplace update "\$\{MARKETPLACE_NAME\}"/)
     assert.match(installer, /gh repo star "\$\{GITHUB_REPO\}"/)
     assert.doesNotMatch(installer, /Star .* now\?/)
     assert.doesNotMatch(installer, /STAR_REPLY/)
     assert.doesNotMatch(installer, /echo "  gh repo star/)
+    assert.match(powershellInstaller, /\$GitHubRepo = "cloneisyou\/clone-loop"/)
+    assert.match(powershellInstaller, /\$PluginRef = "clone-labs@clone-loop"/)
+    assert.match(powershellInstaller, /repo star \$GitHubRepo/)
   })
 
   it('keeps shell installers LF-only so bash can parse them on every OS', () => {

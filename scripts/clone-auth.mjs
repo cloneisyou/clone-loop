@@ -7,11 +7,13 @@ export const DEMO_TOKEN = 'clone_yc-reviewer-public-demo-2026'
 export const AUTH_FILE_NAME = 'auth.local.json'
 
 export function defaultPluginDataDir() {
-  return join(homedir(), '.claude', 'plugins', 'data', 'clone-loop-clone-labs')
+  return join(homedir(), '.claude', 'plugins', 'data', 'clone-labs-clone-loop')
 }
 
 function legacyPluginDataDirs() {
   return [
+    join(homedir(), '.claude', 'plugins', 'data', 'clone-loop-clone-loop'),
+    join(homedir(), '.claude', 'plugins', 'data', 'clone-loop-clone-labs'),
     join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-loop'),
     join(homedir(), '.claude', 'plugins', 'data', 'clone-clone-labs'),
   ]

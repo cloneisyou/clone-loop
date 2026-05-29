@@ -2,6 +2,8 @@
 set -euo pipefail
 
 GITHUB_REPO="cloneisyou/clone-loop"
+MARKETPLACE_NAME="clone-loop"
+PLUGIN_REF="clone-labs@clone-loop"
 
 if command -v claude >/dev/null 2>&1; then
   CLAUDE_BIN="claude"
@@ -16,13 +18,13 @@ fi
 echo "Installing Clone with ${CLAUDE_BIN}..."
 
 if ! "${CLAUDE_BIN}" plugin marketplace add "${GITHUB_REPO}@main"; then
-  echo "Marketplace add did not complete; refreshing clone-labs if it already exists."
-  "${CLAUDE_BIN}" plugin marketplace update clone-labs || true
+  echo "Marketplace add did not complete; refreshing ${MARKETPLACE_NAME} if it already exists."
+  "${CLAUDE_BIN}" plugin marketplace update "${MARKETPLACE_NAME}" || true
 fi
 
-if ! "${CLAUDE_BIN}" plugin install clone-loop@clone-labs --scope user; then
+if ! "${CLAUDE_BIN}" plugin install "${PLUGIN_REF}" --scope user; then
   echo "Install did not complete; trying plugin update for an existing install."
-  "${CLAUDE_BIN}" plugin update clone-loop@clone-labs
+  "${CLAUDE_BIN}" plugin update "${PLUGIN_REF}"
 fi
 
 echo
