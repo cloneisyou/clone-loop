@@ -96,6 +96,7 @@ Open your agent and run:
 
 ```text
 /clone:api-key status
+/clone:api-key login
 /clone:interview "Clarify the feature before coding" --mode deep
 /clone:loop "Run tests and fix any failures" --max-iterations 5
 ```
@@ -104,8 +105,7 @@ Cancel anytime with `/clone:cancel-loop`.
 
 > [!NOTE]
 > Clone ships with a public **demo API key** so you can try it in seconds.
-> For private memory and your own prediction quality, set `CLONE_API_TOKEN`
-> and run `/clone:api-key import-env`.
+> For private memory and your own prediction quality, run `/clone:api-key login`.
 
 To update later: `claude plugin marketplace update clone-loop && claude plugin update clone-labs@clone-loop`.
 
@@ -116,7 +116,7 @@ To update later: `claude plugin marketplace update clone-loop && claude plugin u
 | `/clone:interview "<topic>" [options]` | Clarify a goal into an executable plan. |
 | `/clone:loop "<task>" [options]` | Start a loop. |
 | `/clone:cancel-loop` | Cancel the active loop. |
-| `/clone:api-key status\|import-env\|set\|clear` | Manage your Clone API key. |
+| `/clone:api-key login\|status\|import-env\|set\|clear` | Manage your Clone API key. |
 | `/clone:help` | Show command help. |
 
 ### Options for `/clone:interview`
@@ -226,12 +226,14 @@ claude
 ```
 
 ```text
+/clone:api-key login
 /clone:api-key import-env
 /clone:api-key status
 ```
 
-Prefer `import-env` — `/clone:api-key set <key>` works but the key may
-linger in your transcript.
+Prefer `login` for browser-based setup. `import-env` is useful when
+`CLONE_API_TOKEN` is already set. `/clone:api-key set <key>` works but the
+key may linger in your transcript.
 
 > [!WARNING]
 > The demo key is public and shared. Don't use it with private memory.

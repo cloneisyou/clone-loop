@@ -146,6 +146,112 @@ async function withMcpServer(callback) {
   }
 }
 
+async function withConnectServer(callback) {
+  const calls = []
+  const server = createServer((req, res) => {
+    let body = ''
+    req.setEncoding('utf8')
+    req.on('data', (chunk) => {
+      body += chunk
+    })
+    req.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      calls.push({
+        method: req.method,
+        url: req.url,
+        body: payload,
+      })
+
+      if (req.method === 'POST' && req.url === '/api/auth/clone-loop/connect/exchange/') {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({
+          key: 'clone_oauth_private_token_1234567890',
+          source: 'clone-loop',
+          prefix: 'clone_oauth_pri',
+        }))
+        return
+      }
+
+      res.statusCode = 404
+      res.end(JSON.stringify({ error: 'not found' }))
+    })
+  })
+
+  await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
+  const address = server.address()
+  const url = `http://127.0.0.1:${address.port}`
+  try {
+    return await callback(url, calls)
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose))
+  }
+}
+
+function runLoginNoOpenAndComplete({
+  pluginDataDir,
+  dashboardUrl,
+  mcpUrl,
+  callbackQuery = ({ state }) => `code=browser-code-123&state=${encodeURIComponent(state)}`,
+}) {
+  const env = {
+    ...process.env,
+    CLAUDE_PLUGIN_ROOT: pluginRoot,
+    CLAUDE_PLUGIN_DATA: pluginDataDir,
+    CLONE_DASHBOARD_URL: dashboardUrl,
+    CLONE_MCP_URL: mcpUrl,
+  }
+  delete env.CLONE_API_TOKEN
+
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [scriptPath, 'login', '--no-open'], {
+      cwd: pluginRoot,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let completedCallback = false
+    const timeout = setTimeout(() => {
+      child.kill()
+      rejectRun(new Error(`timed out waiting for login --no-open\nstdout=${stdout}\nstderr=${stderr}`))
+    }, 8000)
+
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+      const match = stdout.match(/Authorize:\s*(http[^\s]+)/)
+      if (!match || completedCallback) return
+      completedCallback = true
+      const authorizeUrl = new URL(match[1])
+      const redirectUri = authorizeUrl.searchParams.get('redirect_uri')
+      const state = authorizeUrl.searchParams.get('state')
+      if (!redirectUri || !state) {
+        clearTimeout(timeout)
+        child.kill()
+        rejectRun(new Error(`authorization URL missing redirect_uri/state: ${match[1]}`))
+        return
+      }
+      fetch(`${redirectUri}?${callbackQuery({ state })}`).catch((err) => {
+        clearTimeout(timeout)
+        child.kill()
+        rejectRun(err)
+      })
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('close', (status) => {
+      clearTimeout(timeout)
+      resolveRun({ status, stdout, stderr })
+    })
+    child.on('error', (err) => {
+      clearTimeout(timeout)
+      rejectRun(err)
+    })
+  })
+}
+
 describe('Clone API key manager', () => {
   it('reports demo fallback status when no env token or plugin config exists', () => {
     withPluginData((pluginDataDir) => {
@@ -179,7 +285,50 @@ describe('Clone API key manager', () => {
 
       assert.notEqual(result.status, 0)
       assert.match(result.stderr, /Private Clone API key is required/)
+      assert.match(result.stderr, /clone:api-key login/)
       assert.doesNotMatch(result.stdout, /Connected Clone Loop/)
+    })
+  })
+
+  it('logs in through browser loopback, stores the exchanged key, and pings MCP', async () => {
+    await withConnectServer(async (dashboardUrl, exchangeCalls) => {
+      await withMcpServer(async (mcpUrl, mcpCalls) => {
+        await withPluginDataAsync(async (pluginDataDir) => {
+          const result = await runLoginNoOpenAndComplete({ pluginDataDir, dashboardUrl, mcpUrl })
+
+          assert.equal(result.status, 0, JSON.stringify({ stdout: result.stdout, stderr: result.stderr }, null, 2))
+          assert.match(result.stdout, /Authorize: http:\/\/127\.0\.0\.1:\d+\/clone-loop\/connect\?/)
+          assert.equal(readStoredToken(pluginDataDir), 'clone_oauth_private_token_1234567890')
+          assert.equal(exchangeCalls.length, 1)
+          assert.equal(exchangeCalls[0].body.code, 'browser-code-123')
+          assert.equal(typeof exchangeCalls[0].body.state, 'string')
+          assert.deepEqual(mcpCalls.map((call) => call.method), ['initialize', 'tools/call'])
+          assert.equal(mcpCalls[0].apiKey, 'clone_oauth_private_token_1234567890')
+          assert.match(result.stdout, /Stored Clone API key from Clone OAuth login/)
+          assert.match(result.stdout, /Connected Clone Loop to Clone Dashboard/)
+          assert.doesNotMatch(result.stdout, /clone_oauth_private_token_1234567890/)
+        })
+      })
+    })
+  })
+
+  it('fails browser loopback login when callback state mismatches', async () => {
+    await withConnectServer(async (dashboardUrl, exchangeCalls) => {
+      await withMcpServer(async (mcpUrl) => {
+        await withPluginDataAsync(async (pluginDataDir) => {
+          const result = await runLoginNoOpenAndComplete({
+            pluginDataDir,
+            dashboardUrl,
+            mcpUrl,
+            callbackQuery: () => 'code=browser-code-123&state=wrong-state',
+          })
+
+          assert.notEqual(result.status, 0)
+          assert.match(result.stderr, /state mismatch/)
+          assert.equal(exchangeCalls.length, 0)
+          assert.equal(existsSync(join(pluginDataDir, 'auth.local.json')), false)
+        })
+      })
     })
   })
 

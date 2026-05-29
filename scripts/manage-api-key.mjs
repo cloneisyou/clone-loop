@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { randomBytes } from 'node:crypto'
+import { spawn } from 'node:child_process'
+import { createServer } from 'node:http'
 import {
   authFilePath,
   clearPluginConfigToken,
@@ -12,8 +15,9 @@ import {
 import { cloneMcpClientInfo, cloneMcpEndpoint, cloneMcpRpc } from './clone-mcp-client.mjs'
 
 const args = process.argv.slice(2)
-const positionalArgs = args.filter((arg) => arg !== '--connect')
+const positionalArgs = args.filter((arg) => !['--connect', '--no-open'].includes(arg))
 const connectAfterStore = args.includes('--connect')
+const noOpen = args.includes('--no-open')
 const command = positionalArgs[0] || 'status'
 let handled = false
 
@@ -44,6 +48,8 @@ function usage() {
 
 USAGE:
   /clone:api-key status
+  /clone:api-key login
+  /clone:api-key login --no-open
   /clone:api-key import-env
   /clone:api-key import-env --connect
   /clone:api-key set <key>
@@ -83,6 +89,10 @@ function dashboardSessionUrl(sessionId) {
   return `${base}/console?session=${encodeURIComponent(sessionId)}#sources`
 }
 
+function dashboardBaseUrl() {
+  return String(process.env.CLONE_DASHBOARD_URL || 'https://clone.is').replace(/\/+$/, '')
+}
+
 async function startDashboardSession(token) {
   const endpoint = cloneMcpEndpoint()
   const init = await cloneMcpRpc(endpoint, token, 'initialize', {
@@ -111,10 +121,9 @@ async function startDashboardSession(token) {
   return cloneSessionId
 }
 
-async function connectToDashboard() {
-  const resolved = resolveCloneToken()
+async function connectResolvedToDashboard(resolved) {
   if (resolved.isDemo) {
-    fail('Private Clone API key is required. Create a key in Clone Dashboard, then run /clone:api-key import-env --connect or /clone:api-key set <key> --connect.')
+    fail('Private Clone API key is required. Run /clone:api-key login, or create a key in Clone Dashboard and run /clone:api-key import-env --connect or /clone:api-key set <key> --connect.')
   }
 
   console.log('Connecting Clone Loop to Clone Dashboard via MCP...')
@@ -124,6 +133,149 @@ async function connectToDashboard() {
   console.log('Connected Clone Loop to Clone Dashboard.')
   console.log(`Clone session: ${sessionId}`)
   console.log(`Dashboard: ${dashboardSessionUrl(sessionId)}`)
+}
+
+async function connectToDashboard() {
+  await connectResolvedToDashboard(resolveCloneToken())
+}
+
+function randomState() {
+  return randomBytes(24).toString('base64url')
+}
+
+function openBrowser(url) {
+  const platform = process.platform
+  const command =
+    platform === 'win32'
+      ? { file: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url] }
+      : platform === 'darwin'
+        ? { file: 'open', args: [url] }
+        : { file: 'xdg-open', args: [url] }
+  return new Promise((resolve, reject) => {
+    const child = spawn(command.file, command.args, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
+    })
+  })
+}
+
+async function startCallbackServer(expectedState) {
+  let resolveReady
+  let rejectReady
+  const ready = new Promise((resolve, reject) => {
+    resolveReady = resolve
+    rejectReady = reject
+  })
+  let resolveCode
+  let rejectCode
+  const codePromise = new Promise((resolve, reject) => {
+    resolveCode = resolve
+    rejectCode = reject
+  })
+  const server = createServer((req, res) => {
+    const requestUrl = new URL(req.url || '/', 'http://127.0.0.1')
+    if (requestUrl.pathname !== '/callback') {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Not found')
+      return
+    }
+
+    const code = requestUrl.searchParams.get('code') || ''
+    const state = requestUrl.searchParams.get('state') || ''
+    if (!code || state !== expectedState) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Clone Loop login failed. You can close this tab and retry.')
+      rejectCode(new Error('Clone Loop login callback state mismatch.'))
+      return
+    }
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    res.end('<!doctype html><title>Clone Loop connected</title><p>Clone Loop connected. You can close this tab.</p>')
+    resolveCode(code)
+  })
+  server.once('error', (err) => {
+    rejectReady(err)
+    rejectCode(err)
+  })
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      rejectCode(new Error('Could not start Clone Loop login callback server.'))
+      server.close()
+      return
+    }
+    resolveReady({
+      redirectUri: `http://127.0.0.1:${address.port}/callback`,
+      codePromise,
+      close: () => new Promise((resolveClose) => server.close(resolveClose)),
+    })
+  })
+  return ready
+}
+
+async function exchangeCloneLoopCode({ code, state }) {
+  const res = await fetch(`${dashboardBaseUrl()}/api/auth/clone-loop/connect/exchange/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, state }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(body?.error || `Clone Loop login exchange failed with HTTP ${res.status}`)
+  }
+  const token = String(body?.key || '').trim()
+  if (!token) throw new Error('Clone Loop login exchange did not return an API key.')
+  return token
+}
+
+async function loginWithClone() {
+  if (connectAfterStore) fail('Usage: /clone:api-key login [--no-open]')
+  if (positionalArgs.length !== 1) fail('Usage: /clone:api-key login [--no-open]')
+
+  const state = randomState()
+  const callback = await startCallbackServer(state)
+  const authorizeUrl = new URL('/clone-loop/connect', dashboardBaseUrl())
+  authorizeUrl.searchParams.set('redirect_uri', callback.redirectUri)
+  authorizeUrl.searchParams.set('state', state)
+  authorizeUrl.searchParams.set('agent_id', cloneLoopAgentId())
+
+  console.log(`Authorize: ${authorizeUrl.toString()}`)
+  if (!noOpen) {
+    try {
+      await openBrowser(authorizeUrl.toString())
+    } catch (err) {
+      console.log(`Open this URL in your browser: ${authorizeUrl.toString()}`)
+      console.log(`Browser launch failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  console.log('Waiting for Clone browser authorization...')
+
+  try {
+    const code = await callback.codePromise
+    await callback.close()
+    const token = await exchangeCloneLoopCode({ code, state })
+    writePluginConfigToken(token)
+    console.log('Stored Clone API key from Clone OAuth login.')
+    console.log(`Token: ${maskToken(token)}`)
+    console.log(`Plugin config: ${authFilePath()}`)
+    await connectResolvedToDashboard({
+      token,
+      source: 'plugin config',
+      masked: maskToken(token),
+      isDemo: false,
+    })
+  } catch (err) {
+    try {
+      await callback.close()
+    } catch {}
+    fail(err instanceof Error ? err.message : String(err))
+  }
 }
 
 function printResolvedToken(prefix = '') {
@@ -154,6 +306,11 @@ if (command === 'status') {
   if (args.length !== 1 && args.length !== 0) fail('Usage: /clone:api-key status')
   printResolvedToken()
   process.exit(0)
+}
+
+if (command === 'login') {
+  handled = true
+  await loginWithClone()
 }
 
 if (command === 'import-env') {

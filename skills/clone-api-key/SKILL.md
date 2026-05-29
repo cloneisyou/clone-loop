@@ -5,7 +5,7 @@ description: Manage the Clone API key used by Clone Loop.
 
 # Clone API Key
 
-Use this skill when the user asks to check, import, set, or clear the Clone API key.
+Use this skill when the user asks to log in, check, import, set, or clear the Clone API key.
 
 Run:
 
@@ -16,6 +16,8 @@ node "${PLUGIN_ROOT}/scripts/manage-api-key.mjs" $ARGUMENTS
 Supported subcommands:
 
 - `status`
+- `login`
+- `login --no-open`
 - `import-env`
 - `import-env --connect`
 - `set <key>`
