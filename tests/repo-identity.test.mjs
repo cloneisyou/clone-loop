@@ -70,6 +70,7 @@ describe('repository identity', () => {
 
     assert.match(installer, /GITHUB_REPO="cloneisyou\/clone-loop"/)
     assert.match(installer, /PLUGIN_REF="clone-labs@clone-loop"/)
+    assert.match(installer, /"\$\{CLAUDE_BIN\}" "\$@" <\/dev\/null/)
     assert.match(installer, /plugin marketplace update "\$\{MARKETPLACE_NAME\}"/)
     assert.match(installer, /gh repo star "\$\{GITHUB_REPO\}"/)
     assert.doesNotMatch(installer, /Star .* now\?/)
